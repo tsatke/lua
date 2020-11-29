@@ -21,7 +21,7 @@ lint: ## Runs the linters (including internal ones)
 
 .PHONY: build
 build: ## Build a binary that is ready for prod
-	go build -o app -ldflags="-s -w -X 'main.Version=$(shell date +%Y%m%d)'" ./cmd/app
+	go build -o lua -ldflags="-s -w -X 'main.Version=$(shell date +%Y%m%d)'" ./cmd/lua
 
 ## Help display.
 ## Pulls comments from beside commands and prints a nicely formatted

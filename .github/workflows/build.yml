@@ -1,14 +1,10 @@
 name: Build
 on:
   push:
-    branches:
-      - master
-      - develop
-      - release/*
   pull_request:
 jobs:
 
-  test:
+  build:
     name: Build for OS ${{ matrix.goos }} with ARCH ${{ matrix.goarch }}
     runs-on: ubuntu-latest
     strategy:
@@ -16,21 +12,26 @@ jobs:
         go_version: [1.14]
         goos: [darwin, linux, windows]
         goarch: [386, amd64]
+        exclude:
+          - goos: darwin
+            goarch: 386
+          - goos: windows
+            goarch: 386
     steps:
-    - name: Set up Go ${{ matrix.go_version }}
-      uses: actions/setup-go@v1
-      with:
-        go-version: ${{ matrix.go_version }}
-      id: go
-    - uses: actions/checkout@v1
-    - name: Build
-      run: |
-        GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o ./bin/app -ldflags="-s -w -X 'main.Version=${GITHUB_REF}'" ./cmd/app
-    - uses: actions-github/upx@master
-      with:
-        dir: ./bin
-        upx_args: '--ultra-brute'
-    - uses: actions/upload-artifact@master
-      with:
-        name: binaries
-        path: ./bin
+        - name: Set up Go ${{ matrix.go_version }}
+          uses: actions/setup-go@v1
+          with:
+            go-version: ${{ matrix.go_version }}
+          id: go
+            - uses: actions/checkout@v1
+            - name: Build
+              run: |
+                GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o ./bin/lua -ldflags="-s -w -X 'main.TheVersion=${GITHUB_REF}'" ./cmd/lua
+            - uses: actions-github/upx@master
+              with:
+                dir: ./bin
+                upx_args: '--ultra-brute'
+            - uses: actions/upload-artifact@master
+              with:
+                name: binaries_${{ matrix.goos }}_${{ matrix.goarch }}
+                path: ./bin

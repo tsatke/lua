@@ -1,4 +1,4 @@
-module github.com/TimSatke/app
+module github.com/tsatke/lua
 
 go 1.14
 
