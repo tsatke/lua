@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/TimSatke/app/internal/tools/analysis/ctxfunc"
+	"github.com/tsatke/lua/internal/tools/analysis/ctxfunc"
 	"golang.org/x/tools/go/analysis/analysistest"
 )
 
