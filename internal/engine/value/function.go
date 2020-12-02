@@ -1,6 +1,6 @@
 package value
 
-type LuaFn func(...Value) (Value, error)
+type LuaFn func(...Value) ([]Value, error)
 
 type Function struct {
 	Name     string

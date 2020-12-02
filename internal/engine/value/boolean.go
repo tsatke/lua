@@ -1,14 +1,14 @@
 package value
 
 const (
-	False = booleanType(0)
-	True  = booleanType(1)
+	False = Boolean(0)
+	True  = Boolean(1)
 )
 
-type booleanType uint8
+type Boolean uint8
 
-func (booleanType) Type() Type { return TypeBoolean }
-func (b booleanType) String() string {
+func (Boolean) Type() Type { return TypeBoolean }
+func (b Boolean) String() string {
 	if b == 0 {
 		return "false"
 	}

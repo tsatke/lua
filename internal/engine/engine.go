@@ -46,6 +46,9 @@ type Engine struct {
 
 	globalScope  *Scope
 	currentScope *Scope
+
+	gcrunning bool
+	gcpercent int
 }
 
 type Scope struct {
@@ -87,17 +90,17 @@ func New(opts ...Option) *Engine {
 	return e
 }
 
-func (e *Engine) EvalString(source string) error {
+func (e *Engine) EvalString(source string) ([]value.Value, error) {
 	return e.Eval(strings.NewReader(source))
 }
 
-func (e *Engine) Eval(source io.Reader) error {
+func (e *Engine) Eval(source io.Reader) ([]value.Value, error) {
 	e.lock.Lock()
 	defer e.lock.Unlock()
 
 	p, err := parser.New(source)
 	if err != nil {
-		return fmt.Errorf("create parser: %w", err)
+		return nil, fmt.Errorf("create parser: %w", err)
 	}
 	ast, ok := p.Parse()
 	if !ok {
@@ -109,12 +112,14 @@ func (e *Engine) Eval(source io.Reader) error {
 		for _, err := range p.Errors() {
 			errString.WriteString("\n\t" + err.Error())
 		}
-		return fmt.Errorf(errString.String())
+		return nil, fmt.Errorf(errString.String())
 	}
-	if err := e.evaluate(ast); err != nil {
-		return fmt.Errorf("evaluate: %w", err)
+
+	results, err := e.evaluateChunk(ast)
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	return results, nil
 }
 
 func (e Engine) dumpState() {

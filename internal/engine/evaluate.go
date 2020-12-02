@@ -8,34 +8,51 @@ import (
 	"github.com/tsatke/lua/internal/token"
 )
 
-func (e *Engine) evaluate(block ast.Block) error {
-	for _, stmt := range block {
-		if err := e.evaluateStatement(stmt); err != nil {
-			return fmt.Errorf("statement %T: %w", stmt, err)
-		}
-	}
-	return nil
-}
+func (e *Engine) evaluateChunk(chunk ast.Chunk) (vs []value.Value, err error) {
+	e.enterNewScope()
+	defer e.leaveScope()
 
-func (e *Engine) evaluateStatement(stmt ast.Statement) error {
 	defer func() {
 		if r := recover(); r != nil {
-			if err, ok := r.(error_); ok {
-				_, _ = e.stderr.Write([]byte(fmt.Sprintf("error: %s", err.message)))
+			if luaErr, ok := r.(error_); ok {
+				msg := "error called with <nil>"
+				if luaErr.message != nil {
+					msg = luaErr.message.(value.String).String()
+				}
+				err = fmt.Errorf("%s", msg)
 			}
 		}
 	}()
-	switch s := stmt.(type) {
-	case ast.Assignment:
-		return e.evaluateAssignment(s)
-	case ast.FunctionCall:
-		_, err := e.evaluateFunctionCall(s)
-		return err
+
+	block := ast.Block(chunk)
+	for _, stmt := range block.StatementsWithoutLast() {
+		if _, err := e.evaluateStatement(stmt); err != nil {
+			return nil, fmt.Errorf("statement %T: %w", stmt, err)
+		}
 	}
-	return fmt.Errorf("%T unsupported", stmt)
+
+	lastStatement, ok := block.LastStatement()
+	if !ok {
+		return nil, nil
+	}
+	results, err := e.evaluateStatement(lastStatement)
+	if err != nil {
+		return nil, fmt.Errorf("last statement %T: %w", lastStatement, err)
+	}
+	return results, nil
 }
 
-func (e *Engine) evaluateFunctionCall(call ast.FunctionCall) (value.Value, error) {
+func (e *Engine) evaluateStatement(stmt ast.Statement) ([]value.Value, error) {
+	switch s := stmt.(type) {
+	case ast.Assignment:
+		return nil, e.evaluateAssignment(s)
+	case ast.FunctionCall:
+		return e.evaluateFunctionCall(s)
+	}
+	return nil, fmt.Errorf("%T unsupported", stmt)
+}
+
+func (e *Engine) evaluateFunctionCall(call ast.FunctionCall) ([]value.Value, error) {
 	if call.Name != nil {
 		return nil, fmt.Errorf("':'-calls unsupported")
 	}
@@ -55,7 +72,7 @@ func (e *Engine) evaluateFunctionCall(call ast.FunctionCall) (value.Value, error
 	}
 	fn := val.(*value.Function)
 
-	// evaluate arguments
+	// evaluateChunk arguments
 	args, err := e.evaluateArgs(call.Args)
 	if err != nil {
 		return nil, fmt.Errorf("args: %w", err)
@@ -91,7 +108,7 @@ func (e *Engine) evaluateExpList(explist []ast.Exp) ([]value.Value, error) {
 	for _, exp := range explist {
 		val, err := e.evaluateExpression(exp)
 		if err != nil {
-			return nil, fmt.Errorf("evaluate expression: %w", err)
+			return nil, fmt.Errorf("evaluateChunk expression: %w", err)
 		}
 		vals = append(vals, val)
 	}
@@ -154,7 +171,7 @@ func (e *Engine) evaluatePrefixExpression(exp ast.PrefixExp) (value.Value, error
 		if err != nil {
 			return nil, fmt.Errorf("function call: %w", err)
 		}
-		return res, nil
+		return res[0], nil // this is something that the C lua interpreter also does, just use the first function result
 	}
 
 	if exp.Exp != nil {

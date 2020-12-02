@@ -10,7 +10,7 @@ import (
 
 // Parser describes a parser that can parse input into a Lua ast.Block.
 type Parser interface {
-	Parse() (ast.Block, bool)
+	Parse() (ast.Chunk, bool)
 	Errors() []error
 }
 
@@ -37,9 +37,9 @@ func New(input io.Reader) (Parser, error) {
 // Parse parses the input of this parser. If the parsing was successful, true will be returned.
 // Otherwise, a potentially incomplete, partial Ast together with false will be returned.
 // If this method returns false, obtain the parse errors with Parser.Errors.
-func (p *parser) Parse() (ast.Block, bool) {
+func (p *parser) Parse() (ast.Chunk, bool) {
 	block := p.block()
-	return block, len(p.errors) == 0
+	return ast.Chunk(block), len(p.errors) == 0
 }
 
 // Errors returns all the parse errors that may have occurred during the parsing.
@@ -335,6 +335,19 @@ func (p *parser) args() (ast.Args, bool) {
 	}
 	switch {
 	case next.Is(token.ParLeft):
+		lookahead, ok := p.next()
+		if !ok {
+			p.collectError(fmt.Errorf("expected something after '(', but got EOF"))
+			return ast.Args{}, false
+		}
+		if lookahead.Is(token.ParRight) {
+			// no explist can follow, so immediately return an empty one
+			return ast.Args{
+				ExpList: []ast.Exp{},
+			}, true
+		}
+		p.stash(lookahead)
+
 		explist := p.explist()
 		rightPar, ok := p.next()
 		if !ok {

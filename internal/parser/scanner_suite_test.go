@@ -57,6 +57,6 @@ func (suite *ScannerSuite) assertTokens(source io.Reader, expected []token.Token
 	for i := 0; i < limit; i++ {
 		suite.Equal(expected[i].Pos(), got[i].Pos(), "Position doesn't match")
 		suite.EqualValues(expected[i].Types(), got[i].Types(), "Types don't match, expected %v, but got %v", expected[i].Types(), got[i].Types())
-		suite.Equal(expected[i].Value(), got[i].Value(), "Value doesn't match")
+		suite.Equal(expected[i].Value(), got[i].Value(), "String doesn't match")
 	}
 }
