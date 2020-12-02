@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"sync"
 
 	"github.com/tsatke/lua/internal/engine/value"
@@ -88,10 +87,6 @@ func New(opts ...Option) *Engine {
 	}
 	e.initStdlib()
 	return e
-}
-
-func (e *Engine) EvalString(source string) ([]value.Value, error) {
-	return e.Eval(strings.NewReader(source))
 }
 
 func (e *Engine) Eval(source io.Reader) ([]value.Value, error) {
