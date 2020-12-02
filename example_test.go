@@ -1,19 +1,17 @@
-package examples
+package lua
 
 import (
 	"io"
 	"os"
 	"strings"
-
-	"github.com/tsatke/lua"
 )
 
 func ExampleEngine_EvalString() {
 	source := `
 print("Hello, World!")
 `
-	e := lua.NewEngine(
-		lua.WithStdout(os.Stdout),
+	e := NewEngine(
+		WithStdout(os.Stdout),
 	)
 	_, err := e.EvalString(source)
 	if err != nil {
@@ -28,8 +26,8 @@ func ExampleEngine_Eval() {
 	var sourceFile io.Reader = strings.NewReader(`
 print("Hello, World!")
 `)
-	e := lua.NewEngine(
-		lua.WithStdout(os.Stdout),
+	e := NewEngine(
+		WithStdout(os.Stdout),
 	)
 	_, err := e.Eval(sourceFile)
 	if err != nil {
