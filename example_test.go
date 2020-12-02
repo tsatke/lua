@@ -7,9 +7,7 @@ import (
 )
 
 func ExampleEngine_EvalString() {
-	source := `
-print("Hello, World!")
-`
+	source := `print("Hello, World!")`
 	e := NewEngine(
 		WithStdout(os.Stdout),
 	)
@@ -23,9 +21,7 @@ print("Hello, World!")
 func ExampleEngine_Eval() {
 	// this can be every file from os.Open or (afero.Fs).Open, which all implement the
 	// io.Reader interface
-	var sourceFile io.Reader = strings.NewReader(`
-print("Hello, World!")
-`)
+	var sourceFile io.Reader = strings.NewReader(`print("Hello, World!")`)
 	e := NewEngine(
 		WithStdout(os.Stdout),
 	)
