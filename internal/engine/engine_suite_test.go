@@ -37,8 +37,3 @@ func (suite *EngineSuite) SetupTest() {
 		WithClock(mockClock{}),
 	)
 }
-
-func (suite *EngineSuite) TearDownTest() {
-	suite.T().Logf("stdout (%d bytes):\n%q", len(suite.stdout.Bytes()), suite.stdout.String())
-	suite.T().Logf("stderr (%d bytes):\n%q", len(suite.stderr.Bytes()), suite.stderr.String())
-}
