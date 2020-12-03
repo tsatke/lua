@@ -9,9 +9,6 @@ import (
 )
 
 func (e *Engine) evaluateChunk(chunk ast.Chunk) (vs []value.Value, err error) {
-	e.enterNewScope()
-	defer e.leaveScope()
-
 	defer func() {
 		if r := recover(); r != nil {
 			if luaErr, ok := r.(error_); ok {
@@ -46,10 +43,28 @@ func (e *Engine) evaluateStatement(stmt ast.Statement) ([]value.Value, error) {
 	switch s := stmt.(type) {
 	case ast.Assignment:
 		return nil, e.evaluateAssignment(s)
+	case ast.Local:
+		return nil, e.evaluateLocal(s)
 	case ast.FunctionCall:
 		return e.evaluateFunctionCall(s)
 	}
 	return nil, fmt.Errorf("%T unsupported", stmt)
+}
+
+func (e *Engine) evaluateLocal(local ast.Local) error {
+	nameAmount, expAmount := len(local.NameList), len(local.ExpList)
+	amount := nameAmount
+	if expAmount < nameAmount {
+		amount = expAmount
+	}
+
+	for i := 0; i < amount; i++ {
+		if err := e.evaluateAssignLocal(local.NameList[i], local.ExpList[i]); err != nil {
+			return fmt.Errorf("assign: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func (e *Engine) evaluateFunctionCall(call ast.FunctionCall) ([]value.Value, error) {
@@ -78,11 +93,7 @@ func (e *Engine) evaluateFunctionCall(call ast.FunctionCall) ([]value.Value, err
 		return nil, fmt.Errorf("args: %w", err)
 	}
 
-	result, err := fn.Callable(args...)
-	if err != nil {
-		return nil, fmt.Errorf("error while calling %s: %w", fn.Name, err)
-	}
-	return result, nil
+	return e.call(fn, args...)
 }
 
 func (e *Engine) evaluateArgs(args ast.Args) ([]value.Value, error) {
@@ -141,6 +152,26 @@ func (e *Engine) evaluateAssign(v ast.Var, exp ast.Exp) error {
 	if err != nil {
 		return fmt.Errorf("expression: %w", err)
 	}
+	scope := e.globalScope
+	if e.isVariableLocal(name) {
+		scope = e.currentScope
+	}
+	e.assign(scope, name, val)
+	return nil
+}
+
+func (e *Engine) evaluateAssignLocal(tk token.Token, exp ast.Exp) error {
+	if !tk.Is(token.Name) {
+		return fmt.Errorf("expected a name token, but got %s (parser broken?)", tk)
+	}
+
+	name := tk.Value()
+
+	val, err := e.evaluateExpression(exp)
+	if err != nil {
+		return fmt.Errorf("expression: %w", err)
+	}
+	// assign in current scope, since it is a local assignment
 	e.assign(e.currentScope, name, val)
 	return nil
 }

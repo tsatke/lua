@@ -65,3 +65,19 @@ do`,
 			token.New("do", token.Position{6, 1, 23}, token.Do),
 		})
 }
+
+func (suite *ScannerSuite) TestConcatenatedTokens() {
+	suite.assertTokensString(`andThese are not_keywords at all, but this is and`,
+		[]token.Token{
+			token.New("andThese", token.Position{1, 1, 0}, token.Name),
+			token.New("are", token.Position{1, 10, 9}, token.Name),
+			token.New("not_keywords", token.Position{1, 14, 13}, token.Name),
+			token.New("at", token.Position{1, 27, 26}, token.Name),
+			token.New("all", token.Position{1, 30, 29}, token.Name),
+			token.New(",", token.Position{1, 33, 32}, token.Comma),
+			token.New("but", token.Position{1, 35, 34}, token.Name),
+			token.New("this", token.Position{1, 39, 38}, token.Name),
+			token.New("is", token.Position{1, 44, 43}, token.Name),
+			token.New("and", token.Position{1, 47, 46}, token.And, token.BinaryOperator),
+		})
+}

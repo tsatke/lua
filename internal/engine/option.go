@@ -1,8 +1,18 @@
 package engine
 
-import "io"
+import (
+	"io"
+
+	"github.com/spf13/afero"
+)
 
 type Option func(*Engine)
+
+func WithFs(fs afero.Fs) Option {
+	return func(e *Engine) {
+		e.fs = fs
+	}
+}
 
 func WithStdin(stdin io.Reader) Option {
 	return func(e *Engine) {

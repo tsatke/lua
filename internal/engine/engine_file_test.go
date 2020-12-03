@@ -4,8 +4,28 @@ import (
 	"bytes"
 	"path/filepath"
 
+	"github.com/spf13/afero"
 	"github.com/tsatke/lua/internal/engine/value"
 )
+
+func (suite *EngineSuite) TestDofile() {
+	suite.runFileTests("dofile", []fileTest{
+		{
+			"dofile01.lua",
+			nil,
+			"",
+			"Goodbye\n",
+			"",
+		},
+		{
+			"dofile02.lua",
+			nil,
+			"",
+			"Hello\n",
+			"",
+		},
+	})
+}
 
 func (suite *EngineSuite) TestErrors() {
 	suite.runFileTests("errors", []fileTest{
@@ -53,6 +73,7 @@ func (suite *EngineSuite) runFileTests(basePath string, tests []fileTest) {
 				WithStdout(stdout),
 				WithStderr(stderr),
 				WithClock(mockClock{}),
+				WithFs(afero.NewBasePathFs(suite.testdata, basePath)),
 			)
 
 			file, err := suite.testdata.Open(filepath.Join(basePath, test.file))
@@ -60,7 +81,9 @@ func (suite *EngineSuite) runFileTests(basePath string, tests []fileTest) {
 			defer func() { _ = file.Close() }()
 
 			gotResults, gotErr := engine.Eval(file)
-			suite.EqualError(gotErr, test.wantErr)
+			if gotErr != nil || test.wantErr != "" {
+				suite.EqualError(gotErr, test.wantErr)
+			}
 			if len(gotResults) > 0 {
 				panic("results not yet supported")
 			}

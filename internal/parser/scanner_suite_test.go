@@ -38,8 +38,14 @@ func (suite *ScannerSuite) assertTokens(source io.Reader, expected []token.Token
 	ok := true
 	for ok {
 		tk, ok = sc.next()
-		if ok {
+		if tk != nil {
 			got = append(got, tk)
+			if tk.Is(token.Error) {
+				suite.Failf("received error token", "(%s) %s", tk.Pos(), tk.Value())
+			}
+		}
+		if !ok {
+			break
 		}
 	}
 

@@ -105,6 +105,29 @@ func (s *inMemoryScanner) check(ahead string) bool {
 	return true
 }
 
+func (s *inMemoryScanner) checkWord(ahead string) bool {
+	runes := []rune(ahead)
+	for i, r := range runes {
+		if r != s.input[s.pos+i] {
+			return false
+		}
+	}
+
+	if len(s.input) > s.pos+len(runes) {
+		r := s.input[s.pos+len(runes)]
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' {
+			/*
+				Assuming that ahead is e.g. 'and', we can't match a variable name like
+				'and_this_is_my_var', or 'andThis', which is, why we check if the word
+				is followed by a rune that would be valid for a Lua name.
+			*/
+			return false
+		}
+	}
+	s.consumeN(len(runes))
+	return true
+}
+
 func (s *inMemoryScanner) tkpos() token.Position {
 	return token.Position{
 		Line:   s.startLine,
@@ -132,71 +155,71 @@ func (s *inMemoryScanner) computeNext() (token.Token, bool) {
 	}
 	switch r {
 	case 'a':
-		if s.check("and") {
+		if s.checkWord("and") {
 			return s.token(token.And, token.BinaryOperator), true
 		}
 	case 'b':
-		if s.check("break") {
+		if s.checkWord("break") {
 			return s.token(token.Break), true
 		}
 	case 'd':
-		if s.check("do") {
+		if s.checkWord("do") {
 			return s.token(token.Do), true
 		}
 	case 'e':
-		if s.check("elseif") {
+		if s.checkWord("elseif") {
 			return s.token(token.Elseif), true
-		} else if s.check("else") {
+		} else if s.checkWord("else") {
 			return s.token(token.Else), true
-		} else if s.check("end") {
+		} else if s.checkWord("end") {
 			return s.token(token.End), true
 		}
 	case 'f':
-		if s.check("false") {
+		if s.checkWord("false") {
 			return s.token(token.False), true
-		} else if s.check("for") {
+		} else if s.checkWord("for") {
 			return s.token(token.For), true
-		} else if s.check("function") {
+		} else if s.checkWord("function") {
 			return s.token(token.Function), true
 		}
 	case 'i':
-		if s.check("if") {
+		if s.checkWord("if") {
 			return s.token(token.If), true
-		} else if s.check("in") {
+		} else if s.checkWord("in") {
 			return s.token(token.In), true
 		}
 	case 'l':
-		if s.check("local") {
+		if s.checkWord("local") {
 			return s.token(token.Local), true
 		}
 	case 'n':
-		if s.check("nil") {
+		if s.checkWord("nil") {
 			return s.token(token.Nil), true
-		} else if s.check("not") {
+		} else if s.checkWord("not") {
 			return s.token(token.Not, token.UnaryOperator), true
 		}
 	case 'o':
-		if s.check("or") {
+		if s.checkWord("or") {
 			return s.token(token.Or, token.BinaryOperator), true
 		}
 	case 'r':
-		if s.check("repeat") {
+		if s.checkWord("repeat") {
 			return s.token(token.Repeat), true
-		} else if s.check("return") {
+		} else if s.checkWord("return") {
 			return s.token(token.Return), true
 		}
 	case 't':
-		if s.check("then") {
+		if s.checkWord("then") {
 			return s.token(token.Then), true
-		} else if s.check("true") {
+		} else if s.checkWord("true") {
 			return s.token(token.True), true
 		}
 	case 'u':
-		if s.check("until") {
+		if s.checkWord("until") {
 			return s.token(token.Until), true
 		}
 	case 'w':
-		if s.check("while") {
+		if s.checkWord("while") {
 			return s.token(token.While), true
 		}
 	case '(':
@@ -280,6 +303,10 @@ func (s *inMemoryScanner) computeNext() (token.Token, bool) {
 	case '#':
 		if s.check("#") {
 			return s.token(token.UnaryOperator), true
+		}
+	case ',':
+		if s.check(",") {
+			return s.token(token.Comma), true
 		}
 	case '"', '\'':
 		return s.string_()

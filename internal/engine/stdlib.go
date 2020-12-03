@@ -96,7 +96,7 @@ func (e *Engine) dofile(args ...Value) ([]Value, error) {
 		}
 	}
 
-	file, err := os.OpenFile(filename.(String).String(), os.O_RDONLY, 0666)
+	file, err := e.fs.OpenFile(filename.(String).String(), os.O_RDONLY, 0666)
 	if err != nil {
 		return nil, fmt.Errorf("open: %w", err)
 	}

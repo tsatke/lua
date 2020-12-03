@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sync"
 
+	"github.com/spf13/afero"
 	"github.com/tsatke/lua/internal/engine/value"
 	"github.com/tsatke/lua/internal/parser"
 )
@@ -25,7 +25,7 @@ type Namer interface {
 // If an error occurs during parsing or evaluation, that error will be returned. In case
 // of a parse error, the state of the engine will remain unaffected.
 type Engine struct {
-	lock *sync.Mutex
+	fs afero.Fs
 
 	// stdin is the input for any program run by this engine.
 	// If a program wants to read from stdin, this is the reader
@@ -72,7 +72,7 @@ func newScopeWithParent(parent *Scope) *Scope {
 func New(opts ...Option) *Engine {
 	global := newScope()
 	e := &Engine{
-		lock: &sync.Mutex{},
+		fs: afero.NewOsFs(),
 
 		stdin:  os.Stdin,
 		stdout: os.Stdout,
@@ -90,9 +90,6 @@ func New(opts ...Option) *Engine {
 }
 
 func (e *Engine) Eval(source io.Reader) ([]value.Value, error) {
-	e.lock.Lock()
-	defer e.lock.Unlock()
-
 	p, err := parser.New(source)
 	if err != nil {
 		return nil, fmt.Errorf("create parser: %w", err)
@@ -150,6 +147,28 @@ func (e *Engine) variable(name string) (value.Value, bool) {
 		}
 	}
 	return nil, false
+}
+
+// isVariableLocal determines whether a variable was declared as 'local'.
+// If this method returns true for a variable name, changes of its value must
+// take place in the current-scope. If this returns false, the variable either
+// doesn't exist or exists, but is defined in the global scope.
+func (e *Engine) isVariableLocal(name string) bool {
+	if _, ok := e.currentScope.variables[name]; ok {
+		return true
+	}
+	return false
+}
+
+func (e *Engine) call(fn *value.Function, args ...value.Value) ([]value.Value, error) {
+	e.enterNewScope()
+	defer e.leaveScope()
+
+	results, err := fn.Callable(args...)
+	if err != nil {
+		return nil, fmt.Errorf("error while calling '%s': %w", fn.Name, err)
+	}
+	return results, nil
 }
 
 func toString(val value.Value) string {

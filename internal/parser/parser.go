@@ -71,6 +71,9 @@ func (p *parser) next() (token.Token, bool) {
 		if !ok {
 			return nil, ok
 		}
+		if next == nil {
+			p.collectError(fmt.Errorf("could not compute token"))
+		}
 		return next, ok
 	}
 }
@@ -110,9 +113,53 @@ func (p *parser) stmt() ast.Statement {
 			}
 			return call
 		}
+	case tk.Is(token.Local):
+		next, ok := p.next()
+		if !ok {
+			p.collectError(fmt.Errorf("unexpected EOF, expected either 'function' or a name"))
+			return nil
+		}
 
+		p.stash(tk, next)
+		switch {
+		case next.Is(token.Name):
+			return p.local()
+		case next.Is(token.Function):
+			panic("unsupported")
+		}
 	}
+	p.collectError(fmt.Errorf("unexpected token %s", tk))
 	return nil
+}
+
+func (p *parser) local() ast.Local {
+	localKeyword, ok := p.next()
+	if !ok {
+		p.collectError(fmt.Errorf("expected 'local', but got EOF"))
+	}
+	if !localKeyword.Is(token.Local) {
+		p.collectError(fmt.Errorf("expected 'local', but got %s", localKeyword))
+	}
+
+	namelist := p.namelist()
+
+	// check if there's a '=' between namelist and explist
+	assign, ok := p.next()
+	if !ok {
+		p.collectError(fmt.Errorf("expected '=' followed by explist, but got EOF"))
+		return ast.Local{}
+	}
+	if !assign.Is(token.Assign) {
+		p.collectError(fmt.Errorf("expected '=' followed by explist, but got %s", assign))
+		return ast.Local{}
+	}
+
+	explist := p.explist()
+
+	return ast.Local{
+		NameList: namelist,
+		ExpList:  explist,
+	}
 }
 
 func (p *parser) assignment() ast.Assignment {
@@ -135,6 +182,26 @@ func (p *parser) assignment() ast.Assignment {
 		VarList: varlist,
 		ExpList: explist,
 	}
+}
+
+func (p *parser) namelist() []token.Token {
+	var list []token.Token
+	for v, ok := p.next(); ok; v, ok = p.next() {
+		if !v.Is(token.Name) {
+			p.collectError(fmt.Errorf("expected name, but got %s", v))
+			return list
+		}
+		list = append(list, v)
+		next, ok := p.next()
+		if !ok {
+			break
+		}
+		if !next.Is(token.Comma) {
+			p.stash(next)
+			break
+		}
+	}
+	return list
 }
 
 func (p *parser) varlist() []ast.Var {
