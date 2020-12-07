@@ -119,6 +119,24 @@ func (e *Engine) error(args ...Value) ([]Value, error) {
 	panic(error_{})
 }
 
+func (e *Engine) getmetatable(args ...Value) ([]Value, error) {
+	if len(args) == 0 {
+		return nil, fmt.Errorf("need one argument to 'getmetatable'")
+	}
+
+	val := args[0]
+	if val.Type() == TypeTable {
+		if metatable := val.(Table).Metatable; metatable != nil {
+			return values(metatable), nil
+		}
+		return values(Nil), nil
+	}
+	if metatable := e.metaTables.Table(val.Type()); metatable != nil {
+		return values(metatable), nil
+	}
+	return nil, fmt.Errorf("no meta table for type %s", val.Type())
+}
+
 func (e *Engine) pcall(args ...Value) ([]Value, error) {
 	if len(args) == 0 {
 		return nil, fmt.Errorf("need one argument to 'pcall'")
@@ -161,6 +179,32 @@ func (e *Engine) print(args ...Value) ([]Value, error) {
 	}
 	_, _ = e.stdout.Write([]byte{0x0a})
 	return nil, nil
+}
+
+func (e *Engine) setmetatable(args ...Value) ([]Value, error) {
+	if len(args) != 2 {
+		return nil, fmt.Errorf("need two arguments to 'setmetatable'")
+	}
+
+	if args[0].Type() != TypeTable {
+		return nil, fmt.Errorf("bad argument #1 to 'setmetatable' (%s expected, got %s)", TypeTable, args[0].Type())
+	}
+	if args[1].Type() != TypeTable && args[1].Type() != TypeNil {
+		return nil, fmt.Errorf("bad argument #2 to 'setmetatable' (%s expected, got %s)", TypeTable, args[1].Type())
+	}
+	metatable := args[0].(*Table).Metatable
+	if metatable != nil {
+		if _, ok := metatable.Get("__metatable"); ok {
+			_, _ = e.error(NewString("original metatable has a __metatable field"))
+		}
+	}
+	if args[1] == Nil {
+		metatable = nil
+	} else {
+		metatable = args[1].(*Table)
+	}
+
+	return values(args[0]), nil
 }
 
 func (e *Engine) tostring(args ...Value) ([]Value, error) {

@@ -46,6 +46,8 @@ type Engine struct {
 	globalScope  *Scope
 	currentScope *Scope
 
+	metaTables metaTables
+
 	gcrunning bool
 	gcpercent int
 }
@@ -86,6 +88,7 @@ func New(opts ...Option) *Engine {
 		opt(e)
 	}
 	e.initStdlib()
+	e.initMetatables()
 	return e
 }
 
