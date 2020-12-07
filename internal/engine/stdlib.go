@@ -17,6 +17,7 @@ func (e *Engine) initStdlib() {
 	register(NewFunction("assert", e.assert))
 	register(NewFunction("dofile", e.dofile))
 	register(NewFunction("error", e.error))
+	register(NewFunction("pcall", e.pcall))
 	register(NewFunction("print", e.print))
 	register(NewFunction("tostring", e.tostring))
 	register(NewFunction("type", e.type_))
@@ -114,9 +115,37 @@ func (e *Engine) error(args ...Value) ([]Value, error) {
 		panic(error_{
 			message: args[0],
 		})
-		return nil, nil // unreachable
 	}
 	panic(error_{})
+}
+
+func (e *Engine) pcall(args ...Value) ([]Value, error) {
+	if len(args) == 0 {
+		return nil, fmt.Errorf("need one argument to 'pcall'")
+	}
+
+	results, err := func() (res []Value, recoveredErr error) {
+		defer e.protect(&recoveredErr)
+
+		fn := args[0]
+		if fn.Type() != TypeFunction {
+			return nil, fmt.Errorf("bad argument to 'pcall' (%s expected, got %s)", TypeFunction, fn.Type())
+		}
+		fnVal := fn.(*Function)
+		results, err := e.call(fnVal, args[1:]...)
+		if err != nil {
+			// this happens if the call fails internally, not if 'error' has been called
+			return nil, fmt.Errorf("call: %w", err)
+		}
+		return results, nil
+	}()
+	if err != nil {
+		if luaErr, ok := err.(error_); ok {
+			return values(False, luaErr.message), nil
+		}
+		return nil, fmt.Errorf("protected: %w", err)
+	}
+	return append(values(True), results...), nil
 }
 
 func (e *Engine) print(args ...Value) ([]Value, error) {
@@ -124,10 +153,14 @@ func (e *Engine) print(args ...Value) ([]Value, error) {
 		if i != 0 {
 			_, _ = e.stdout.Write([]byte("\t"))
 		}
-		_, _ = e.stdout.Write([]byte(toString(args[i])))
+		strs, err := e.tostring(args[i])
+		if err != nil {
+			return nil, fmt.Errorf("tostring: %w", err)
+		}
+		_, _ = e.stdout.Write([]byte(strs[0].(String)))
 	}
 	_, _ = e.stdout.Write([]byte{0x0a})
-	return values(Nil), nil
+	return nil, nil
 }
 
 func (e *Engine) tostring(args ...Value) ([]Value, error) {
@@ -140,7 +173,7 @@ func (e *Engine) tostring(args ...Value) ([]Value, error) {
 	case TypeNil:
 		return values(NewString("nil")), nil
 	case TypeBoolean:
-		if value.(Boolean) == 0 {
+		if !value.(Boolean) {
 			return values(NewString("false")), nil
 		}
 		return values(NewString("true")), nil

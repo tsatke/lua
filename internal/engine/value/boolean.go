@@ -1,15 +1,15 @@
 package value
 
 const (
-	False = Boolean(0)
-	True  = Boolean(1)
+	False = Boolean(false)
+	True  = Boolean(true)
 )
 
-type Boolean uint8
+type Boolean bool
 
 func (Boolean) Type() Type { return TypeBoolean }
 func (b Boolean) String() string {
-	if b == 0 {
+	if !b {
 		return "false"
 	}
 	return "true"

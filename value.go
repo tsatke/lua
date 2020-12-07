@@ -50,7 +50,7 @@ func convertFromInternal(vs ...value.Value) Values {
 		case value.TypeNil:
 			val = Nil
 		case value.TypeBoolean:
-			if v.(value.Boolean) == 0 {
+			if !v.(value.Boolean) {
 				val = False
 			} else {
 				val = True

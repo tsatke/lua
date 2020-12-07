@@ -149,17 +149,6 @@ func (e *Engine) variable(name string) (value.Value, bool) {
 	return nil, false
 }
 
-// isVariableLocal determines whether a variable was declared as 'local'.
-// If this method returns true for a variable name, changes of its value must
-// take place in the current-scope. If this returns false, the variable either
-// doesn't exist or exists, but is defined in the global scope.
-func (e *Engine) isVariableLocal(name string) bool {
-	if _, ok := e.currentScope.variables[name]; ok {
-		return true
-	}
-	return false
-}
-
 func (e *Engine) call(fn *value.Function, args ...value.Value) ([]value.Value, error) {
 	e.enterNewScope()
 	defer e.leaveScope()
@@ -169,11 +158,4 @@ func (e *Engine) call(fn *value.Function, args ...value.Value) ([]value.Value, e
 		return nil, fmt.Errorf("error while calling '%s': %w", fn.Name, err)
 	}
 	return results, nil
-}
-
-func toString(val value.Value) string {
-	if val.Type() == value.TypeString {
-		return string(val.(value.String))
-	}
-	panic("type " + val.Type().String())
 }

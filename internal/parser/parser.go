@@ -236,8 +236,8 @@ func (p *parser) var_() (ast.Var, bool) {
 	lookahead, ok := p.next()
 	if ok && (lookahead.Is(token.BracketLeft) || lookahead.Is(token.Dot)) {
 		p.stash(name, lookahead)
-		prefixexp, ok := p.prefixexp()
-		if !ok {
+		prefixexp := p.prefixexp()
+		if prefixexp == nil {
 			p.collectError(fmt.Errorf("expected a prefixexp, but got EOF"))
 			return ast.Var{}, false
 		}
@@ -313,8 +313,8 @@ func (p *parser) exp() ast.Exp {
 		}
 	case next.Is(token.ParLeft) || next.Is(token.Name):
 		p.stash(next)
-		prefixexp, ok := p.prefixexp()
-		if !ok {
+		prefixexp := p.prefixexp()
+		if prefixexp == nil {
 			p.collectError(fmt.Errorf("expected prefixexp, but got nothing"))
 			return nil
 		}
@@ -323,75 +323,130 @@ func (p *parser) exp() ast.Exp {
 	panic("implement function, tableconstructor, binary operation")
 }
 
-func (p *parser) prefixexp() (ast.PrefixExp, bool) {
+func (p *parser) prefixexp() ast.Exp {
 	next, ok := p.next()
 	if !ok {
-		p.collectError(fmt.Errorf("expected prefixexp, but got EOF"))
-		return ast.PrefixExp{}, false
+		p.collectError(ErrUnexpectedEof("prefixexp"))
+		return nil
 	}
+
+	var var_ ast.Var
+	var exp ast.Exp
+
 	switch {
-	case next.Is(token.ParLeft):
-		exp := p.exp()
-		if exp == nil {
-			p.collectError(fmt.Errorf("expected exp after %s, but got nothing", next))
-			return ast.PrefixExp{}, false
-		}
-		parRight, ok := p.next()
-		if !ok {
-			p.collectError(fmt.Errorf("expected rightpar after exp, but got EOF"))
-		}
-		if !parRight.Is(token.ParRight) {
-			p.collectError(fmt.Errorf("expected rightpar after exp, but got %s", parRight))
-		}
-		return ast.PrefixExp{
-			Exp: exp,
-		}, true
 	case next.Is(token.Name):
 		p.stash(next)
 		v, ok := p.var_()
 		if !ok {
-			p.collectError(fmt.Errorf("expected var, but got nothing"))
-			return ast.PrefixExp{}, false
+			p.collectError(ErrExpectedSomething("var"))
+			return nil
+		}
+		var_ = v
+	case next.Is(token.ParLeft):
+		p.stash(next)
+		e := p.exp()
+		if e == nil {
+			p.collectError(ErrExpectedSomething("exp"))
+			return nil
+		}
+		rightPar, ok := p.next()
+		if !ok {
+			p.collectError(ErrUnexpectedEof("')'"))
+			return nil
+		}
+		if !rightPar.Is(token.ParRight) {
+			p.collectError(ErrUnexpectedThing("')'", rightPar))
+			return nil
+		}
+		exp = e
+	}
+
+	next, ok = p.next()
+	if !ok || !(next.Is(token.Colon) || next.Is(token.ParLeft) || next.Is(token.CurlyLeft) || next.Is(token.String)) {
+		if ok {
+			// only stash next if there is one
+			p.stash(next)
 		}
 		return ast.PrefixExp{
-			Var: v,
-		}, true
+			Var: var_,
+			Exp: exp,
+		}
 	}
-	panic("implement functioncall")
+	p.stash(next)
+
+	var functionCall ast.Statement
+	// first is a flag with which we check if it's the first run of the loop.
+	// We use this to check whether it's ok if no :<Name> or <args> follows.
+	first := true
+	for {
+		next, ok = p.next()
+		if !ok {
+			if first {
+				p.collectError(ErrUnexpectedEof("':', '(', '{' or String_"))
+				return nil
+			}
+			break
+		}
+		if !next.Is(token.ParLeft) {
+			p.stash(next)
+			break
+		}
+		first = false
+
+		var name token.Token
+		if next.Is(token.Colon) {
+			name, ok = p.next()
+			if !ok {
+				p.collectError(ErrUnexpectedEof("Name"))
+				return nil
+			}
+			if !name.Is(token.Name) {
+				p.collectError(ErrUnexpectedThing("Name", name))
+				return nil
+			}
+		}
+		p.stash(next)
+		args, ok := p.args()
+		if !ok {
+			p.collectError(ErrExpectedSomething("args"))
+			return nil
+		}
+		functionCall = ast.FunctionCall{
+			PrefixExp: ast.PrefixExp{
+				Var:          var_,
+				Exp:          exp,
+				FunctionCall: functionCall,
+			},
+			Name: name,
+			Args: args,
+		}
+	}
+	return ast.PrefixExp{
+		FunctionCall: functionCall,
+	}
 }
 
 func (p *parser) functionCall() (ast.FunctionCall, bool) {
-	prefixexp, ok := p.prefixexp()
-	if !ok {
+	if next, ok := p.next(); ok {
+		// next is either name or '('
+		if !next.Is(token.Name) && !next.Is(token.ParLeft) {
+			p.collectError(fmt.Errorf("expected either '(' or name, but got %s", next))
+			return ast.FunctionCall{}, false
+		}
+
+		// functioncall starts with prefixexp, so we need to enter prefixexp anyways
+		p.stash(next)
+	} else {
+		p.collectError(fmt.Errorf("expected prefixexp, but got EOF"))
+		return ast.FunctionCall{}, false
+	}
+
+	prefixexp := p.prefixexp()
+	if prefixexp == nil {
 		p.collectError(fmt.Errorf("expected prefixexp, but got nothing"))
 		return ast.FunctionCall{}, false
 	}
-	colon, ok := p.next()
-	if !ok {
-		p.collectError(fmt.Errorf("expected ':' or args, but got EOF"))
-		return ast.FunctionCall{}, false
-	}
-	var name token.Token
-	if colon.Is(token.Colon) {
-		next, ok := p.next()
-		if !ok {
-			p.collectError(fmt.Errorf("expected name, but got EOF"))
-			return ast.FunctionCall{}, false
-		}
-		name = next
-	}
-
-	p.stash(colon) // not a colon, put it back for args
-	args, ok := p.args()
-	if !ok {
-		p.collectError(fmt.Errorf("expected args, but got nothing"))
-		return ast.FunctionCall{}, false
-	}
-	return ast.FunctionCall{
-		PrefixExp: prefixexp,
-		Name:      name,
-		Args:      args,
-	}, true
+	return prefixexp.(ast.PrefixExp).FunctionCall.(ast.FunctionCall), true
 }
 
 func (p *parser) args() (ast.Args, bool) {
@@ -435,6 +490,6 @@ func (p *parser) args() (ast.Args, bool) {
 			String: next,
 		}, true
 	}
-	p.collectError(fmt.Errorf("expected one of '(', '{' or a String, but got %s", next))
+	p.collectError(fmt.Errorf("expected one of '(', '{' or a String_, but got %s", next))
 	return ast.Args{}, false
 }

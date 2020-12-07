@@ -6,8 +6,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/suite"
 	"github.com/tsatke/lua/internal/ast"
+	"github.com/tsatke/lua/internal/token"
 )
 
 func TestParserSuite(t *testing.T) {
@@ -18,11 +20,11 @@ type ParserSuite struct {
 	suite.Suite
 }
 
-func (suite *ParserSuite) assertBlockString(input string, expected ast.Block) {
+func (suite *ParserSuite) assertBlockString(input string, expected ast.Chunk) {
 	suite.assertBlock(strings.NewReader(input), expected)
 }
 
-func (suite *ParserSuite) assertBlock(source io.Reader, expected ast.Block) {
+func (suite *ParserSuite) assertBlock(source io.Reader, expected ast.Chunk) {
 	parser, err := New(source)
 	suite.NoError(err)
 
@@ -37,5 +39,18 @@ func (suite *ParserSuite) assertBlock(source io.Reader, expected ast.Block) {
 		suite.Failf("there are parse errors", "%s", errors.String())
 	}
 
-	suite.EqualValues(expected, got)
+	opts := []cmp.Option{
+		cmp.Comparer(func(left, right token.Token) bool {
+			if left == nil || right == nil {
+				return suite.Equal(left, right)
+			}
+			return suite.Equal(left.Types(), right.Types()) &&
+				suite.Equal(left.Types(), right.Types()) &&
+				suite.EqualValues(left.Types(), right.Types())
+		}),
+	}
+
+	if !cmp.Equal(expected, got, opts...) {
+		suite.Failf("not equal", "%s", cmp.Diff(expected, got, opts...))
+	}
 }

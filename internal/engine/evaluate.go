@@ -8,18 +8,18 @@ import (
 	"github.com/tsatke/lua/internal/token"
 )
 
-func (e *Engine) evaluateChunk(chunk ast.Chunk) (vs []value.Value, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			if luaErr, ok := r.(error_); ok {
-				msg := "error called with <nil>"
-				if luaErr.message != nil {
-					msg = luaErr.message.(value.String).String()
-				}
-				err = fmt.Errorf("%s", msg)
-			}
+func (e *Engine) protect(errToSet *error) {
+	if r := recover(); r != nil {
+		if luaErr, ok := r.(error_); ok {
+			*errToSet = luaErr
+		} else {
+			panic(r)
 		}
-	}()
+	}
+}
+
+func (e *Engine) evaluateChunk(chunk ast.Chunk) (vs []value.Value, err error) {
+	defer e.protect(&err)
 
 	block := ast.Block(chunk)
 	for _, stmt := range block.StatementsWithoutLast() {
@@ -117,11 +117,11 @@ func (e *Engine) evaluateArgs(args ast.Args) ([]value.Value, error) {
 func (e *Engine) evaluateExpList(explist []ast.Exp) ([]value.Value, error) {
 	var vals []value.Value
 	for _, exp := range explist {
-		val, err := e.evaluateExpression(exp)
+		results, err := e.evaluateExpression(exp)
 		if err != nil {
 			return nil, fmt.Errorf("evaluateChunk expression: %w", err)
 		}
-		vals = append(vals, val)
+		vals = append(vals, results...)
 	}
 	return vals, nil
 }
@@ -148,15 +148,18 @@ func (e *Engine) evaluateAssign(v ast.Var, exp ast.Exp) error {
 	}
 
 	name := v.Name.Value()
-	val, err := e.evaluateExpression(exp)
+	vals, err := e.evaluateExpression(exp)
 	if err != nil {
 		return fmt.Errorf("expression: %w", err)
 	}
 	scope := e.globalScope
-	if e.isVariableLocal(name) {
+	// if the variable is already declared in the current scope (either
+	// we are currently in the global scope, or the variable has been declared
+	// with 'local'), assign in the current scope
+	if _, ok := e.currentScope.variables[name]; ok {
 		scope = e.currentScope
 	}
-	e.assign(scope, name, val)
+	e.assign(scope, name, vals[0])
 	return nil
 }
 
@@ -172,14 +175,18 @@ func (e *Engine) evaluateAssignLocal(tk token.Token, exp ast.Exp) error {
 		return fmt.Errorf("expression: %w", err)
 	}
 	// assign in current scope, since it is a local assignment
-	e.assign(e.currentScope, name, val)
+	e.assign(e.currentScope, name, val[0])
 	return nil
 }
 
-func (e *Engine) evaluateExpression(exp ast.Exp) (value.Value, error) {
+func (e *Engine) evaluateExpression(exp ast.Exp) ([]value.Value, error) {
 	switch ex := exp.(type) {
 	case ast.SimpleExp:
-		return e.evaluateSimpleExpression(ex)
+		evaluated, err := e.evaluateSimpleExpression(ex)
+		if err != nil {
+			return nil, err
+		}
+		return values(evaluated), nil
 	case ast.ComplexExp:
 		return e.evaluateComplexExpression(ex)
 	default:
@@ -187,7 +194,7 @@ func (e *Engine) evaluateExpression(exp ast.Exp) (value.Value, error) {
 	}
 }
 
-func (e *Engine) evaluateComplexExpression(exp ast.ComplexExp) (value.Value, error) {
+func (e *Engine) evaluateComplexExpression(exp ast.ComplexExp) ([]value.Value, error) {
 	switch ex := exp.(type) {
 	case ast.PrefixExp:
 		return e.evaluatePrefixExpression(ex)
@@ -196,13 +203,13 @@ func (e *Engine) evaluateComplexExpression(exp ast.ComplexExp) (value.Value, err
 	}
 }
 
-func (e *Engine) evaluatePrefixExpression(exp ast.PrefixExp) (value.Value, error) {
+func (e *Engine) evaluatePrefixExpression(exp ast.PrefixExp) ([]value.Value, error) {
 	if exp.FunctionCall != nil {
 		res, err := e.evaluateFunctionCall(exp.FunctionCall.(ast.FunctionCall))
 		if err != nil {
 			return nil, fmt.Errorf("function call: %w", err)
 		}
-		return res[0], nil // this is something that the C lua interpreter also does, just use the first function result
+		return res, nil
 	}
 
 	if exp.Exp != nil {
@@ -221,7 +228,7 @@ func (e *Engine) evaluatePrefixExpression(exp ast.PrefixExp) (value.Value, error
 	return res, nil
 }
 
-func (e *Engine) evaluateVar(v ast.Var) (value.Value, error) {
+func (e *Engine) evaluateVar(v ast.Var) ([]value.Value, error) {
 	if v.Name == nil {
 		return nil, fmt.Errorf("only names are supported as variables")
 	}
@@ -230,7 +237,7 @@ func (e *Engine) evaluateVar(v ast.Var) (value.Value, error) {
 	if !ok {
 		return nil, nil
 	}
-	return value, nil
+	return values(value), nil
 }
 
 func (e *Engine) evaluateSimpleExpression(exp ast.SimpleExp) (value.Value, error) {

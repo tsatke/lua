@@ -8,6 +8,18 @@ import (
 	"github.com/tsatke/lua/internal/engine/value"
 )
 
+func (suite *EngineSuite) TestPcall() {
+	suite.runFileTests("pcall", []fileTest{
+		{
+			"pcall01.lua",
+			nil,
+			"",
+			"false	error message\nprint message\ntrue\n",
+			"",
+		},
+	})
+}
+
 func (suite *EngineSuite) TestDofile() {
 	suite.runFileTests("dofile", []fileTest{
 		{
@@ -82,7 +94,7 @@ func (suite *EngineSuite) runFileTests(basePath string, tests []fileTest) {
 
 			gotResults, gotErr := engine.Eval(file)
 			if gotErr != nil || test.wantErr != "" {
-				suite.EqualError(gotErr, test.wantErr)
+				suite.EqualErrorf(gotErr, test.wantErr, "%s", gotErr)
 			}
 			if len(gotResults) > 0 {
 				panic("results not yet supported")
