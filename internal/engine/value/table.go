@@ -3,12 +3,12 @@ package value
 type Table struct {
 	Metatable *Table
 
-	fields map[string]Value
+	Fields map[string]Value
 }
 
 func NewTable() *Table {
 	return &Table{
-		fields: make(map[string]Value),
+		Fields: make(map[string]Value),
 	}
 }
 
@@ -16,13 +16,13 @@ func (Table) Type() Type { return TypeTable }
 
 func (t *Table) Set(key string, value Value) {
 	if value == Nil {
-		delete(t.fields, key)
+		delete(t.Fields, key)
 	} else {
-		t.fields[key] = value
+		t.Fields[key] = value
 	}
 }
 
 func (t *Table) Get(key string) (Value, bool) {
-	val, ok := t.fields[key]
+	val, ok := t.Fields[key]
 	return val, ok
 }

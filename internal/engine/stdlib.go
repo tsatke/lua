@@ -11,9 +11,9 @@ import (
 
 func (e *Engine) initStdlib() {
 	register := func(fn *Function) {
-		e.assign(e.globalScope, fn.Name, fn)
+		e.assign(e._G, fn.Name, fn)
 	}
-	e.assign(e.globalScope, "_VERSION", NewString("Lua 5.3"))
+	e.assign(e._G, "_VERSION", NewString("Lua 5.3"))
 	register(NewFunction("assert", e.assert))
 	register(NewFunction("dofile", e.dofile))
 	register(NewFunction("error", e.error))

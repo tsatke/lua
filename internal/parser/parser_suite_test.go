@@ -44,9 +44,16 @@ func (suite *ParserSuite) assertBlock(source io.Reader, expected ast.Chunk) {
 			if left == nil || right == nil {
 				return suite.Equal(left, right)
 			}
-			return suite.Equal(left.Types(), right.Types()) &&
-				suite.Equal(left.Types(), right.Types()) &&
-				suite.EqualValues(left.Types(), right.Types())
+			if left.Value() != right.Value() {
+				return false
+			}
+			if left.Pos() != right.Pos() {
+				return false
+			}
+			if !suite.EqualValuesf(left.Types(), right.Types(), "types don't match: expected %v but got %v", left.Types(), right.Types()) {
+				return false
+			}
+			return true
 		}),
 	}
 

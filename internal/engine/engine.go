@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/spf13/afero"
+	"github.com/tsatke/lua/internal/ast"
 	"github.com/tsatke/lua/internal/engine/value"
 	"github.com/tsatke/lua/internal/parser"
 )
@@ -43,8 +44,8 @@ type Engine struct {
 	// clock is the clock that the engine will use if it requires a timestamp.
 	clock Clock
 
-	globalScope  *Scope
-	currentScope *Scope
+	_G     *value.Table
+	scopes []*value.Table
 
 	metaTables metaTables
 
@@ -52,27 +53,11 @@ type Engine struct {
 	gcpercent int
 }
 
-type Scope struct {
-	parent    *Scope
-	variables map[string]value.Value
-}
-
-func newScope() *Scope {
-	return newScopeWithParent(nil)
-}
-
-func newScopeWithParent(parent *Scope) *Scope {
-	return &Scope{
-		parent:    parent,
-		variables: make(map[string]value.Value),
-	}
-}
-
 // New creates a new, ready to use Engine, already applying all given options.
 // By default, the engine uses os.Stdin as stdin, os.Stdout as stdout and os.Stderr
 // as stderr.
 func New(opts ...Option) *Engine {
-	global := newScope()
+	global := value.NewTable()
 	e := &Engine{
 		fs: afero.NewOsFs(),
 
@@ -81,8 +66,8 @@ func New(opts ...Option) *Engine {
 		stderr: os.Stderr,
 		clock:  sysClock{},
 
-		globalScope:  global,
-		currentScope: global,
+		_G:     global,
+		scopes: []*value.Table{global},
 	}
 	for _, opt := range opts {
 		opt(e)
@@ -117,35 +102,42 @@ func (e *Engine) Eval(source io.Reader) ([]value.Value, error) {
 	return results, nil
 }
 
+func (e *Engine) currentScope() *value.Table {
+	return e.scopes[0]
+}
+
 func (e Engine) dumpState() {
 	fmt.Printf("clock: %T\n", e.clock)
 	fmt.Println("global scope:")
-	for name, value := range e.globalScope.variables {
+	for name, value := range e._G.Fields {
 		fmt.Printf("%-15s = %s\n", name, value)
 	}
-	if e.currentScope != e.globalScope {
+	if e.currentScope() != e._G {
 		fmt.Println("current scope:")
-		for name, value := range e.currentScope.variables {
+		for name, value := range e.currentScope().Fields {
 			fmt.Printf("%-15s = %s\n", name, value)
 		}
 	}
 }
 
-func (e *Engine) assign(scope *Scope, name string, val value.Value) {
-	scope.variables[name] = val
+func (e *Engine) assign(scope *value.Table, name string, val value.Value) {
+	scope.Set(name, val)
 }
 
 func (e *Engine) enterNewScope() {
-	e.currentScope = newScopeWithParent(e.currentScope)
+	e.scopes = append([]*value.Table{value.NewTable()}, e.scopes...)
 }
 
 func (e *Engine) leaveScope() {
-	e.currentScope = e.currentScope.parent
+	e.scopes[0] = nil
+	e.scopes = e.scopes[1:]
 }
 
+// variable searches for a variable with the given name, starting in the current
+// scope and always visiting the parent scope if there is no such variable.
 func (e *Engine) variable(name string) (value.Value, bool) {
-	for scope := e.currentScope; scope != nil; scope = scope.parent {
-		if val, ok := scope.variables[name]; ok {
+	for i := 0; i < len(e.scopes); i++ {
+		if val, ok := e.scopes[i].Fields[name]; ok {
 			return val, true
 		}
 	}
@@ -161,4 +153,21 @@ func (e *Engine) call(fn *value.Function, args ...value.Value) ([]value.Value, e
 		return nil, fmt.Errorf("error while calling '%s': %w", fn.Name, err)
 	}
 	return results, nil
+}
+
+func (e *Engine) createCallable(parameters ast.ParList, block ast.Block) (value.LuaFn, error) {
+	return func(args ...value.Value) ([]value.Value, error) {
+		// this assumes, that we are already in a separate function scope
+
+		// assign all arguments to the parameters in the current scope
+		for i, arg := range args {
+			e.assign(e.currentScope(), parameters.NameList[i].Value(), arg)
+		}
+
+		results, err := e.evaluateBlock(block)
+		if err != nil {
+			return nil, fmt.Errorf("block: %w", err)
+		}
+		return results, nil
+	}, nil
 }

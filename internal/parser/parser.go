@@ -127,9 +127,220 @@ func (p *parser) stmt() ast.Statement {
 		case next.Is(token.Function):
 			panic("unsupported")
 		}
+	case tk.Is(token.Function):
+		p.stash(tk)
+		fn, ok := p.function()
+		if !ok {
+			p.collectError(fmt.Errorf("expected function, but got nothing"))
+			return nil
+		}
+		return fn
+	case tk.Is(token.End):
+		// This is kind of a workaround.
+		// If we try to parse ay kind of block, it consists
+		// of statements followed by 'end'. 'end' should not give
+		// a statement, so stash it and return nil.
+		p.stash(tk)
+		return nil
 	}
 	p.collectError(fmt.Errorf("unexpected token %s", tk))
 	return nil
+}
+
+func (p *parser) function() (ast.Function, bool) {
+	next, ok := p.next()
+	if !ok {
+		p.collectError(ErrUnexpectedEof("function"))
+		return ast.Function{}, false
+	}
+	if !next.Is(token.Function) {
+		p.collectError(ErrUnexpectedThing("function", next))
+		return ast.Function{}, false
+	}
+
+	next, ok = p.next()
+	if !ok {
+		p.collectError(ErrUnexpectedEof("name or body"))
+		return ast.Function{}, false
+	}
+	var name *ast.FuncName
+	if next.Is(token.Name) {
+		p.stash(next)
+		fname, ok := p.funcname()
+		if !ok {
+			p.collectError(ErrUnexpectedEof("name"))
+			return ast.Function{}, false
+		}
+		name = &fname
+	}
+	fbody, ok := p.funcbody()
+	if !ok {
+		p.collectError(ErrExpectedSomething("funcbody"))
+		return ast.Function{}, false
+	}
+	return ast.Function{
+		FuncName: name,
+		FuncBody: fbody,
+	}, true
+}
+
+func (p *parser) funcname() (ast.FuncName, bool) {
+	var list []token.Token
+	for name, ok := p.next(); ok; name, ok = p.next() {
+		list = append(list, name)
+		next, ok := p.next()
+		if !ok {
+			break
+		}
+		if !next.Is(token.Dot) {
+			p.stash(next)
+			break
+		}
+	}
+	next, ok := p.next()
+	if !ok {
+		return ast.FuncName{
+			Name1: list,
+		}, true
+	}
+	if !next.Is(token.Colon) {
+		p.stash(next)
+		return ast.FuncName{
+			Name1: list,
+		}, true
+	}
+
+	next, ok = p.next()
+	if !ok {
+		p.collectError(ErrUnexpectedEof("name"))
+		return ast.FuncName{}, false
+	}
+	if !next.Is(token.Name) {
+		p.collectError(ErrUnexpectedThing("name", next))
+		return ast.FuncName{}, false
+	}
+	return ast.FuncName{
+		Name1: list,
+		Name2: next,
+	}, true
+}
+
+func (p *parser) funcbody() (ast.FuncBody, bool) {
+	next, ok := p.next()
+	if !ok {
+		p.collectError(ErrUnexpectedEof("'('"))
+		return ast.FuncBody{}, false
+	}
+	if !next.Is(token.ParLeft) {
+		p.collectError(ErrUnexpectedThing("'('", next))
+		return ast.FuncBody{}, false
+	}
+
+	next, ok = p.next()
+	if !ok {
+		p.collectError(ErrUnexpectedEof("parlist or ')'"))
+		return ast.FuncBody{}, false
+	}
+	if !next.Is(token.Name) && !next.Is(token.Ellipsis) && !next.Is(token.ParRight) {
+		p.collectError(ErrUnexpectedThing("parlist or ')'", next))
+		return ast.FuncBody{}, false
+	}
+
+	var parlist ast.ParList
+	if !next.Is(token.ParRight) {
+		p.stash(next)
+		l, ok := p.parlist()
+		if !ok {
+			p.collectError(ErrExpectedSomething("parlist"))
+			return ast.FuncBody{}, false
+		}
+		parlist = l
+
+		next, ok = p.next()
+		if !ok {
+			p.collectError(ErrUnexpectedEof("')'"))
+			return ast.FuncBody{}, false
+		}
+		if !next.Is(token.ParRight) {
+			p.collectError(ErrUnexpectedThing("')'", next))
+			return ast.FuncBody{}, false
+		}
+	}
+
+	block := p.block()
+	if block == nil {
+		p.collectError(ErrExpectedSomething("block"))
+		return ast.FuncBody{}, false
+	}
+
+	next, ok = p.next()
+	if !ok {
+		p.collectError(ErrUnexpectedEof("end"))
+		return ast.FuncBody{}, false
+	}
+	if !next.Is(token.End) {
+		p.collectError(ErrUnexpectedThing("end", next))
+		return ast.FuncBody{}, false
+	}
+
+	return ast.FuncBody{
+		ParList: parlist,
+		Block:   block,
+	}, true
+}
+
+func (p *parser) parlist() (ast.ParList, bool) {
+	next, ok := p.next()
+	if !ok {
+		p.collectError(ErrUnexpectedEof("name or '...'"))
+		return ast.ParList{}, false
+	}
+	if !next.Is(token.Name) && !next.Is(token.Ellipsis) {
+		p.collectError(ErrUnexpectedThing("name or '...'", next))
+		return ast.ParList{}, false
+	}
+
+	if next.Is(token.Ellipsis) {
+		return ast.ParList{
+			Ellipsis: true,
+		}, true
+	}
+
+	// stash the first name of the namelist that we read
+	p.stash(next)
+
+	namelist := p.namelist()
+	if namelist == nil {
+		p.collectError(ErrExpectedSomething("namelist"))
+		return ast.ParList{}, false
+	}
+
+	next, ok = p.next()
+	if !ok {
+		return ast.ParList{
+			NameList: namelist,
+		}, true
+	}
+	if !next.Is(token.Comma) {
+		p.stash(next)
+		return ast.ParList{
+			NameList: namelist,
+		}, true
+	}
+
+	next, ok = p.next()
+	if !ok {
+		p.collectError(ErrUnexpectedEof("'...'"))
+		return ast.ParList{}, false
+	}
+	if !next.Is(token.Ellipsis) {
+		p.collectError(ErrUnexpectedThing("'...'", next))
+		return ast.ParList{}, false
+	}
+	return ast.ParList{
+		NameList: namelist,
+		Ellipsis: true,
+	}, true
 }
 
 func (p *parser) local() ast.Local {

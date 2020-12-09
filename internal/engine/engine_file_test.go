@@ -8,6 +8,25 @@ import (
 	"github.com/tsatke/lua/internal/engine/value"
 )
 
+func (suite *EngineSuite) TestFunction() {
+	suite.runFileTests("function", []fileTest{
+		{
+			"function01.lua",
+			nil,
+			"",
+			"Hello\n",
+			"",
+		},
+		{
+			"function02.lua",
+			nil,
+			"",
+			"bye\nhello\n",
+			"",
+		},
+	})
+}
+
 func (suite *EngineSuite) TestPcall() {
 	suite.runFileTests("pcall", []fileTest{
 		{

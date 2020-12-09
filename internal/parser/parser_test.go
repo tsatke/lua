@@ -43,6 +43,39 @@ a=x
 	})
 }
 
+func (suite *ParserSuite) TestFunctionDeclaration() {
+	suite.assertBlockString(`
+function foo.bar()
+	some = code
+end
+`, ast.Chunk{
+		ast.Function{
+			FuncName: &ast.FuncName{
+				Name1: []token.Token{
+					token.New("foo", token.Position{2, 10, 10}, token.Name),
+					token.New("bar", token.Position{2, 14, 14}, token.Name),
+				},
+			},
+			FuncBody: ast.FuncBody{
+				Block: ast.Block{
+					ast.Assignment{
+						VarList: []ast.Var{
+							{Name: token.New("some", token.Position{3, 2, 21}, token.Name)},
+						},
+						ExpList: []ast.Exp{
+							ast.PrefixExp{
+								Var: ast.Var{
+									Name: token.New("code", token.Position{3, 9, 28}, token.Name),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	})
+}
+
 func (suite *ParserSuite) TestNestedFunctionCall() {
 	suite.assertBlockString(`
 print(pcall(print, "print message"))

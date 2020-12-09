@@ -19,9 +19,11 @@ func (e *Engine) protect(errToSet *error) {
 }
 
 func (e *Engine) evaluateChunk(chunk ast.Chunk) (vs []value.Value, err error) {
-	defer e.protect(&err)
+	defer e.protect(&err) // chunks are run just as blocks, but protected
+	return e.evaluateBlock(ast.Block(chunk))
+}
 
-	block := ast.Block(chunk)
+func (e *Engine) evaluateBlock(block ast.Block) ([]value.Value, error) {
 	for _, stmt := range block.StatementsWithoutLast() {
 		if _, err := e.evaluateStatement(stmt); err != nil {
 			return nil, fmt.Errorf("statement %T: %w", stmt, err)
@@ -47,8 +49,28 @@ func (e *Engine) evaluateStatement(stmt ast.Statement) ([]value.Value, error) {
 		return nil, e.evaluateLocal(s)
 	case ast.FunctionCall:
 		return e.evaluateFunctionCall(s)
+	case ast.Function:
+		return e.evaluateFunction(s)
 	}
 	return nil, fmt.Errorf("%T unsupported", stmt)
+}
+
+func (e *Engine) evaluateFunction(decl ast.Function) ([]value.Value, error) {
+	if decl.FuncName.Name2 != nil {
+		return nil, fmt.Errorf("function with ':' not supported")
+	}
+	if len(decl.FuncName.Name1) != 1 {
+		return nil, fmt.Errorf("only plain functions supported")
+	}
+
+	fnName := decl.FuncName.Name1[0].Value()
+
+	luaFn, err := e.createCallable(decl.FuncBody.ParList, decl.FuncBody.Block)
+	if err != nil {
+		return nil, fmt.Errorf("create callable: %w", err)
+	}
+	e.assign(e._G, fnName, value.NewFunction(fnName, luaFn)) // change the function name when we support more than just one name fragment
+	return nil, nil
 }
 
 func (e *Engine) evaluateLocal(local ast.Local) error {
@@ -152,12 +174,12 @@ func (e *Engine) evaluateAssign(v ast.Var, exp ast.Exp) error {
 	if err != nil {
 		return fmt.Errorf("expression: %w", err)
 	}
-	scope := e.globalScope
+	scope := e._G
 	// if the variable is already declared in the current scope (either
 	// we are currently in the global scope, or the variable has been declared
 	// with 'local'), assign in the current scope
-	if _, ok := e.currentScope.variables[name]; ok {
-		scope = e.currentScope
+	if _, ok := e.currentScope().Fields[name]; ok {
+		scope = e.currentScope()
 	}
 	e.assign(scope, name, vals[0])
 	return nil
@@ -175,7 +197,7 @@ func (e *Engine) evaluateAssignLocal(tk token.Token, exp ast.Exp) error {
 		return fmt.Errorf("expression: %w", err)
 	}
 	// assign in current scope, since it is a local assignment
-	e.assign(e.currentScope, name, val[0])
+	e.assign(e.currentScope(), name, val[0])
 	return nil
 }
 
