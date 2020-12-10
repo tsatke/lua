@@ -4,7 +4,10 @@ import "github.com/tsatke/lua/internal/token"
 
 type (
 	// Chunk is just a Block, but is expected to run in a separate scope.
-	Chunk Block
+	Chunk struct {
+		Name string
+		Block
+	}
 
 	// Block is a list of statements. At least one statement is present.
 	// The last Statement may be of type LastStatement.

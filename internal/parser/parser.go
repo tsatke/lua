@@ -3,6 +3,7 @@ package parser
 import (
 	"fmt"
 	"io"
+	"path/filepath"
 
 	"github.com/tsatke/lua/internal/ast"
 	"github.com/tsatke/lua/internal/token"
@@ -12,6 +13,10 @@ import (
 type Parser interface {
 	Parse() (ast.Chunk, bool)
 	Errors() []error
+}
+
+type namer interface {
+	Name() string
 }
 
 type parser struct {
@@ -31,6 +36,7 @@ func New(input io.Reader) (Parser, error) {
 	}
 	return &parser{
 		scanner: sc,
+		input:   input,
 	}, nil
 }
 
@@ -39,7 +45,16 @@ func New(input io.Reader) (Parser, error) {
 // If this method returns false, obtain the parse errors with Parser.Errors.
 func (p *parser) Parse() (ast.Chunk, bool) {
 	block := p.block()
-	return ast.Chunk(block), len(p.errors) == 0
+
+	name := "<unknown input>"
+	if n, ok := p.input.(namer); ok {
+		name = filepath.Base(n.Name())
+	}
+
+	return ast.Chunk{
+		Block: block,
+		Name:  name,
+	}, len(p.errors) == 0
 }
 
 // Errors returns all the parse errors that may have occurred during the parsing.

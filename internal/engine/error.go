@@ -6,6 +6,7 @@ type error_ struct {
 	e       Engine
 	message value.Value
 	level   value.Value
+	stack   []stackFrame
 }
 
 func (e error_) Error() string {

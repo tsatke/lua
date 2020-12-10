@@ -51,6 +51,8 @@ type Engine struct {
 
 	gcrunning bool
 	gcpercent int
+
+	stack *callStack
 }
 
 // New creates a new, ready to use Engine, already applying all given options.
@@ -68,6 +70,8 @@ func New(opts ...Option) *Engine {
 
 		_G:     global,
 		scopes: []*value.Table{global},
+
+		stack: newCallStack(),
 	}
 	for _, opt := range opts {
 		opt(e)
@@ -147,6 +151,14 @@ func (e *Engine) variable(name string) (value.Value, bool) {
 func (e *Engine) call(fn *value.Function, args ...value.Value) ([]value.Value, error) {
 	e.enterNewScope()
 	defer e.leaveScope()
+
+	if ok := e.stack.Push(stackFrame{
+		name: fn.Name,
+	}); !ok {
+		_, _ = e.error(value.NewString(fmt.Sprintf("stack overflow while calling '%s'", fn.Name)))
+		return nil, fmt.Errorf("stack overflow")
+	}
+	defer e.stack.Pop()
 
 	results, err := fn.Callable(args...)
 	if err != nil {

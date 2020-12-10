@@ -111,12 +111,16 @@ func (e *Engine) dofile(args ...Value) ([]Value, error) {
 }
 
 func (e *Engine) error(args ...Value) ([]Value, error) {
+	var message Value
+	var stack []stackFrame
 	if len(args) > 0 {
-		panic(error_{
-			message: args[0],
-		})
+		message = args[0]
+		stack = e.stack.Slice()
 	}
-	panic(error_{})
+	panic(error_{
+		message: message,
+		stack:   stack,
+	})
 }
 
 func (e *Engine) getmetatable(args ...Value) ([]Value, error) {

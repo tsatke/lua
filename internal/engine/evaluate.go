@@ -20,7 +20,16 @@ func (e *Engine) protect(errToSet *error) {
 
 func (e *Engine) evaluateChunk(chunk ast.Chunk) (vs []value.Value, err error) {
 	defer e.protect(&err) // chunks are run just as blocks, but protected
-	return e.evaluateBlock(ast.Block(chunk))
+
+	if ok := e.stack.Push(stackFrame{
+		name: chunk.Name,
+	}); !ok {
+		_, _ = e.error(value.NewString("stack overflow while evaluating chunk"))
+		return nil, fmt.Errorf("stack overflow")
+	}
+	defer e.stack.Pop()
+
+	return e.evaluateBlock(chunk.Block)
 }
 
 func (e *Engine) evaluateBlock(block ast.Block) ([]value.Value, error) {

@@ -37,3 +37,9 @@ func WithClock(clock Clock) Option {
 		e.clock = clock
 	}
 }
+
+func WithMaxStackSize(maxSize int) Option {
+	return func(e *Engine) {
+		e.stack.maxSize = maxSize
+	}
+}
