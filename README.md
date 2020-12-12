@@ -7,11 +7,10 @@
         <a href="https://github.com/tsatke/lua/actions"><img src="https://github.com/tsatke/lua/workflows/Build/badge.svg"></a>
         <a href="https://github.com/tsatke/lua/actions"><img src="https://github.com/tsatke/lua/workflows/Tests/badge.svg"></a>
         <a href="https://github.com/tsatke/lua/actions"><img src="https://github.com/tsatke/lua/workflows/Static%20analysis/badge.svg"></a>
-        <br>
-        <img src="https://img.shields.io/badge/status-WIP-yellow">
     </p>
 </p>
 
 ---
 
-The actual README content.
+A Lua interpreter, not really a VM.
+Still a work in progress.
