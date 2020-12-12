@@ -14,4 +14,4 @@
 
 ---
 
-The actual README content.
+A Lua interpreter, not really a VM.
