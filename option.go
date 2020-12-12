@@ -33,3 +33,9 @@ func WithStderr(stderr io.Writer) Option {
 		e.stderr = stderr
 	}
 }
+
+func WithWorkingDirectory(dir string) Option {
+	return func(e *Engine) {
+		e.workingDir = dir
+	}
+}

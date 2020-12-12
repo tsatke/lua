@@ -113,7 +113,7 @@ func (suite *EngineSuite) runFileTests(basePath string, tests []fileTest) {
 
 			gotResults, gotErr := engine.Eval(file)
 			if gotErr != nil || test.wantErr != "" {
-				suite.IsType(error_{}, gotErr)
+				suite.IsType(Error{}, gotErr)
 				suite.EqualErrorf(gotErr, test.wantErr, "%s", gotErr)
 			}
 			if len(gotResults) > 0 {

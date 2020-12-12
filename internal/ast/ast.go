@@ -15,9 +15,7 @@ type (
 
 	// Var is a variable declaration without assignment.
 	Var struct {
-		Name      token.Token
-		Exp       Exp
-		PrefixExp Exp
+		PrefixExp
 	}
 
 	// Field is a field in a table constructor.

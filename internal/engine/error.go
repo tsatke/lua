@@ -2,18 +2,18 @@ package engine
 
 import "github.com/tsatke/lua/internal/engine/value"
 
-type error_ struct {
+type Error struct {
 	e       Engine
-	message value.Value
+	Message value.Value
 	level   value.Value
-	stack   []stackFrame
+	Stack   []StackFrame
 }
 
-func (e error_) Error() string {
-	if e.message == nil {
+func (e Error) Error() string {
+	if e.Message == nil {
 		return "error called with <nil>"
 	}
-	res, err := e.e.tostring(e.message)
+	res, err := e.e.tostring(e.Message)
 	if err != nil {
 		panic(err)
 	}

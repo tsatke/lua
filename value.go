@@ -41,7 +41,7 @@ func (v Values) Get(index int) Value {
 	return v[index]
 }
 
-func convertFromInternal(vs ...value.Value) Values {
+func valuesFromInternal(vs ...value.Value) Values {
 	var vals Values
 
 	for _, v := range vs {

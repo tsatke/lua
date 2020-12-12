@@ -1,0 +1,3 @@
+[submodule "testdata/lua-test"]
+	path = testdata/lua-test
+	url = git@github.com:tsatke/lua-test.git

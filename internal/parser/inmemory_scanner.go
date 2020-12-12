@@ -147,7 +147,29 @@ func (s *inMemoryScanner) drainWhitespace() {
 	_ = s.token() // ignore whitespaces
 }
 
+func (s *inMemoryScanner) skipRemainingLine() {
+	var done bool
+	for !done {
+		next, ok := s.lookahead()
+		if !ok {
+			return
+		}
+		if next == '\n' {
+			done = true
+		}
+		s.consume()
+	}
+	_ = s.token() // ignore this line
+}
+
 func (s *inMemoryScanner) computeNext() (token.Token, bool) {
+start:
+	if s.pos == 0 {
+		// skip shebang
+		if s.check("#!") {
+			s.skipRemainingLine()
+		}
+	}
 	s.drainWhitespace()
 	r, ok := s.lookahead()
 	if !ok {
@@ -259,7 +281,10 @@ func (s *inMemoryScanner) computeNext() (token.Token, bool) {
 			return s.token(token.BinaryOperator), true
 		}
 	case '-':
-		if s.check("-") {
+		if s.check("--") { // EOL-comment
+			s.skipRemainingLine() // ignore everything until line-end
+			goto start
+		} else if s.check("-") {
 			return s.token(token.UnaryOperator, token.BinaryOperator), true
 		}
 	case '*':
@@ -307,6 +332,10 @@ func (s *inMemoryScanner) computeNext() (token.Token, bool) {
 	case ',':
 		if s.check(",") {
 			return s.token(token.Comma), true
+		}
+	case ':':
+		if s.check(":") {
+			return s.token(token.Colon), true
 		}
 	case '"', '\'':
 		return s.string_()

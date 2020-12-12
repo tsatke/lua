@@ -112,14 +112,14 @@ func (e *Engine) dofile(args ...Value) ([]Value, error) {
 
 func (e *Engine) error(args ...Value) ([]Value, error) {
 	var message Value
-	var stack []stackFrame
+	var stack []StackFrame
 	if len(args) > 0 {
 		message = args[0]
 		stack = e.stack.Slice()
 	}
-	panic(error_{
-		message: message,
-		stack:   stack,
+	panic(Error{
+		Message: message,
+		Stack:   stack,
 	})
 }
 
@@ -162,8 +162,8 @@ func (e *Engine) pcall(args ...Value) ([]Value, error) {
 		return results, nil
 	}()
 	if err != nil {
-		if luaErr, ok := err.(error_); ok {
-			return values(False, luaErr.message), nil
+		if luaErr, ok := err.(Error); ok {
+			return values(False, luaErr.Message), nil
 		}
 		return nil, fmt.Errorf("protected: %w", err)
 	}

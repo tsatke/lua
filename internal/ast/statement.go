@@ -17,9 +17,7 @@ type (
 
 	// FunctionCall is a Lua function call.
 	FunctionCall struct {
-		PrefixExp Exp
-		Name      token.Token
-		Args      Args
+		PrefixExp PrefixExp
 	}
 
 	// DoBlock is a Lua do construct.

@@ -8,12 +8,12 @@ type (
 	}
 
 	node struct {
-		frame stackFrame
+		frame StackFrame
 		next  *node
 	}
 
-	stackFrame struct {
-		name string
+	StackFrame struct {
+		Name string
 	}
 )
 
@@ -21,7 +21,7 @@ func newCallStack() *callStack {
 	return &callStack{}
 }
 
-func (s *callStack) Push(frame stackFrame) bool {
+func (s *callStack) Push(frame StackFrame) bool {
 	if s.maxSize != 0 && s.size+1 >= s.maxSize {
 		return false
 	}
@@ -34,9 +34,9 @@ func (s *callStack) Push(frame stackFrame) bool {
 	return true
 }
 
-func (s *callStack) Pop() (stackFrame, bool) {
+func (s *callStack) Pop() (StackFrame, bool) {
 	if s.head == nil {
-		return stackFrame{}, false
+		return StackFrame{}, false
 	}
 	frame := s.head.frame
 	s.head = s.head.next
@@ -44,8 +44,8 @@ func (s *callStack) Pop() (stackFrame, bool) {
 	return frame, true
 }
 
-func (s *callStack) Slice() []stackFrame {
-	frames := make([]stackFrame, s.size)
+func (s *callStack) Slice() []StackFrame {
+	frames := make([]StackFrame, s.size)
 	current := s.head
 	i := 0
 	for current != nil {
@@ -56,6 +56,6 @@ func (s *callStack) Slice() []stackFrame {
 	return frames
 }
 
-func (f stackFrame) String() string {
-	return f.name
+func (f StackFrame) String() string {
+	return f.Name
 }

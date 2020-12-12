@@ -13,14 +13,46 @@ print("Hello, World!")
 		Block: ast.Block{
 			ast.FunctionCall{
 				PrefixExp: ast.PrefixExp{
-					Var: ast.Var{
-						Name: token.New("print", token.Position{2, 1, 1}, token.Name),
+					Name: token.New("print", token.Position{2, 1, 1}, token.Name),
+					Fragments: []ast.PrefixExpFragment{
+						{
+							Args: &ast.Args{
+								ExpList: []ast.Exp{
+									ast.SimpleExp{
+										String: token.New(`"Hello, World!"`, token.Position{2, 7, 7}, token.String),
+									},
+								},
+							},
+						},
 					},
 				},
-				Args: ast.Args{
-					ExpList: []ast.Exp{
-						ast.SimpleExp{
-							String: token.New(`"Hello, World!"`, token.Position{2, 7, 7}, token.String),
+			},
+		},
+	})
+}
+
+func (suite *ParserSuite) TestFunctionCallColon() {
+	suite.assertBlockString(`
+io.stderr:write("foobar")
+`, ast.Chunk{
+		Name: "<unknown input>",
+		Block: ast.Block{
+			ast.FunctionCall{
+				PrefixExp: ast.PrefixExp{
+					Name: token.New("io", token.Position{2, 1, 1}, token.Name),
+					Fragments: []ast.PrefixExpFragment{
+						{
+							Name: token.New("stderr", token.Position{2, 4, 4}, token.Name),
+						},
+						{
+							Name: token.New("write", token.Position{2, 11, 11}, token.Name),
+							Args: &ast.Args{
+								ExpList: []ast.Exp{
+									ast.SimpleExp{
+										String: token.New(`"foobar"`, token.Position{2, 17, 17}, token.String),
+									},
+								},
+							},
 						},
 					},
 				},
@@ -37,11 +69,15 @@ a=x
 		Block: ast.Block{
 			ast.Assignment{
 				VarList: []ast.Var{
-					{Name: token.New("a", token.Position{2, 1, 1}, token.Name)},
+					{
+						PrefixExp: ast.PrefixExp{
+							Name: token.New("a", token.Position{2, 1, 1}, token.Name),
+						},
+					},
 				},
 				ExpList: []ast.Exp{
 					ast.PrefixExp{
-						Var: ast.Var{Name: token.New("x", token.Position{2, 3, 3}, token.Name)},
+						Name: token.New("x", token.Position{2, 3, 3}, token.Name),
 					},
 				},
 			},
@@ -68,13 +104,15 @@ end
 					Block: ast.Block{
 						ast.Assignment{
 							VarList: []ast.Var{
-								{Name: token.New("some", token.Position{3, 2, 21}, token.Name)},
+								{
+									PrefixExp: ast.PrefixExp{
+										Name: token.New("some", token.Position{3, 2, 21}, token.Name),
+									},
+								},
 							},
 							ExpList: []ast.Exp{
 								ast.PrefixExp{
-									Var: ast.Var{
-										Name: token.New("code", token.Position{3, 9, 28}, token.Name),
-									},
+									Name: token.New("code", token.Position{3, 9, 28}, token.Name),
 								},
 							},
 						},
@@ -93,28 +131,26 @@ print(pcall(print, "print message"))
 		Block: ast.Block{
 			ast.FunctionCall{
 				PrefixExp: ast.PrefixExp{
-					Var: ast.Var{
-						Name: token.New("print", token.Position{2, 1, 1}, token.Name),
-					},
-				},
-				Args: ast.Args{
-					ExpList: []ast.Exp{
-						ast.PrefixExp{
-							FunctionCall: ast.FunctionCall{
-								PrefixExp: ast.PrefixExp{
-									Var: ast.Var{
+					Name: token.New("print", token.Position{2, 1, 1}, token.Name),
+					Fragments: []ast.PrefixExpFragment{
+						{
+							Args: &ast.Args{
+								ExpList: []ast.Exp{
+									ast.PrefixExp{
 										Name: token.New("pcall", token.Position{2, 7, 7}, token.Name),
-									},
-								},
-								Args: ast.Args{
-									ExpList: []ast.Exp{
-										ast.PrefixExp{
-											Var: ast.Var{
-												Name: token.New("print", token.Position{2, 13, 13}, token.Name),
+										Fragments: []ast.PrefixExpFragment{
+											{
+												Args: &ast.Args{
+													ExpList: []ast.Exp{
+														ast.PrefixExp{
+															Name: token.New("print", token.Position{2, 13, 13}, token.Name),
+														},
+														ast.SimpleExp{
+															String: token.New(`"print message"`, token.Position{2, 20, 20}, token.String),
+														},
+													},
+												},
 											},
-										},
-										ast.SimpleExp{
-											String: token.New(`"print message"`, token.Position{2, 20, 20}, token.String),
 										},
 									},
 								},

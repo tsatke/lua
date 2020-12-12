@@ -27,9 +27,16 @@ type (
 
 	// PrefixExp is a prefix expression.
 	PrefixExp struct {
-		Var          Var
-		FunctionCall Statement
-		Exp          Exp
+		Name token.Token
+		Exp  Exp
+
+		Fragments []PrefixExpFragment
+	}
+
+	PrefixExpFragment struct {
+		Exp  Exp
+		Name token.Token
+		Args *Args
 	}
 
 	// TableConstructor is a table constructor, which consists of

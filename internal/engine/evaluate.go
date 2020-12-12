@@ -10,7 +10,7 @@ import (
 
 func (e *Engine) protect(errToSet *error) {
 	if r := recover(); r != nil {
-		if luaErr, ok := r.(error_); ok {
+		if luaErr, ok := r.(Error); ok {
 			*errToSet = luaErr
 		} else {
 			panic(r)
@@ -21,11 +21,11 @@ func (e *Engine) protect(errToSet *error) {
 func (e *Engine) evaluateChunk(chunk ast.Chunk) (vs []value.Value, err error) {
 	defer e.protect(&err) // chunks are run just as blocks, but protected
 
-	if ok := e.stack.Push(stackFrame{
-		name: chunk.Name,
+	if ok := e.stack.Push(StackFrame{
+		Name: chunk.Name,
 	}); !ok {
-		_, _ = e.error(value.NewString("stack overflow while evaluating chunk"))
-		return nil, fmt.Errorf("stack overflow")
+		_, _ = e.error(value.NewString("Stack overflow while evaluating chunk"))
+		return nil, fmt.Errorf("Stack overflow")
 	}
 	defer e.stack.Pop()
 
@@ -78,7 +78,7 @@ func (e *Engine) evaluateFunction(decl ast.Function) ([]value.Value, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create callable: %w", err)
 	}
-	e.assign(e._G, fnName, value.NewFunction(fnName, luaFn)) // change the function name when we support more than just one name fragment
+	e.assign(e._G, fnName, value.NewFunction(fnName, luaFn)) // change the function Name when we support more than just one Name fragment
 	return nil, nil
 }
 
@@ -99,32 +99,16 @@ func (e *Engine) evaluateLocal(local ast.Local) error {
 }
 
 func (e *Engine) evaluateFunctionCall(call ast.FunctionCall) ([]value.Value, error) {
-	if call.Name != nil {
-		return nil, fmt.Errorf("':'-calls unsupported")
+	prefixExp := call.PrefixExp
+	if prefixExp.Exp != nil {
+		return nil, fmt.Errorf("expression calls are not supported yet")
 	}
 
-	if call.PrefixExp.(ast.PrefixExp).Var.Name == nil {
-		return nil, fmt.Errorf("only simple function calls are supported")
-	}
-
-	// obtain function
-	fnName := call.PrefixExp.(ast.PrefixExp).Var.Name.Value()
-	val, ok := e.variable(fnName)
-	if !ok {
-		return nil, fmt.Errorf("attempt to call a nil value ('%s')", fnName)
-	}
-	if val.Type() != value.TypeFunction {
-		return nil, fmt.Errorf("attempt to call value of type %s ('%s')", val.Type(), fnName)
-	}
-	fn := val.(*value.Function)
-
-	// evaluateChunk arguments
-	args, err := e.evaluateArgs(call.Args)
+	results, err := e.evaluatePrefixExpression(prefixExp)
 	if err != nil {
-		return nil, fmt.Errorf("args: %w", err)
+		return nil, err
 	}
-
-	return e.call(fn, args...)
+	return results, nil
 }
 
 func (e *Engine) evaluateArgs(args ast.Args) ([]value.Value, error) {
@@ -196,7 +180,7 @@ func (e *Engine) evaluateAssign(v ast.Var, exp ast.Exp) error {
 
 func (e *Engine) evaluateAssignLocal(tk token.Token, exp ast.Exp) error {
 	if !tk.Is(token.Name) {
-		return fmt.Errorf("expected a name token, but got %s (parser broken?)", tk)
+		return fmt.Errorf("expected a Name token, but got %s (parser broken?)", tk)
 	}
 
 	name := tk.Value()
@@ -235,28 +219,93 @@ func (e *Engine) evaluateComplexExpression(exp ast.ComplexExp) ([]value.Value, e
 }
 
 func (e *Engine) evaluatePrefixExpression(exp ast.PrefixExp) ([]value.Value, error) {
-	if exp.FunctionCall != nil {
-		res, err := e.evaluateFunctionCall(exp.FunctionCall.(ast.FunctionCall))
-		if err != nil {
-			return nil, fmt.Errorf("function call: %w", err)
-		}
-		return res, nil
-	}
+	var current value.Value
+	var currentName string
 
 	if exp.Exp != nil {
-		res, err := e.evaluateExpression(exp.Exp)
+		currentName = "(<exp>)"
+
+		results, err := e.evaluateExpression(exp.Exp)
 		if err != nil {
 			return nil, fmt.Errorf("expression: %w", err)
 		}
-		return res, nil
+		if len(results) == 0 {
+			current = nil
+		} else {
+			// if an expression is in parenthesis, which is the case here,
+			// the values it evaluates to are cut down to one, meaning that all
+			// elements except the first one are discarded
+			current = results[0]
+		}
+	} else {
+		name := exp.Name.Value()
+		var ok bool
+		current, ok = e.variable(name)
+		if !ok {
+			return nil, fmt.Errorf("no such variable '%s'", name)
+		}
+		currentName = name
 	}
 
-	// only var is left
-	res, err := e.evaluateVar(exp.Var)
-	if err != nil {
-		return nil, fmt.Errorf("var: %w", err)
+	if len(exp.Fragments) == 0 {
+		return values(current), nil
 	}
-	return res, nil
+
+	var results []value.Value
+
+	for i, fragment := range exp.Fragments {
+		if current == nil {
+			return nil, fmt.Errorf("cannot index nil value of variable '%s'", currentName)
+		}
+
+		results = nil
+
+		if fragment.Exp != nil {
+			return nil, fmt.Errorf("explicit indexing (a.[x]) not supported yet")
+		}
+
+		if fragment.Name != nil {
+			table, ok := current.(*value.Table)
+			if !ok {
+				return nil, fmt.Errorf("cannot index variable of type %s", current.Type())
+			}
+			current, ok = table.Get(fragment.Name.Value())
+			if !ok {
+				return nil, fmt.Errorf("variable '%s' has no field '%s'", currentName, fragment.Name.Value())
+			}
+			currentName = fragment.Name.Value()
+		}
+
+		if fragment.Args != nil {
+			// this fragment is a function call
+
+			fn, ok := current.(*value.Function)
+			if !ok {
+				return nil, fmt.Errorf("cannot call non-function variable '%s'", currentName)
+			}
+
+			args, err := e.evaluateArgs(*fragment.Args)
+			if err != nil {
+				return nil, fmt.Errorf("args: %w", err)
+			}
+
+			res, err := e.call(fn, args...)
+			if err != nil {
+				return nil, fmt.Errorf("call '%s': %w", currentName, err)
+			}
+			results = res
+			if len(res) == 0 && i < len(exp.Fragments)-1 {
+				// One fragment function call can only return nil, if it's the last fragment. Otherwise,
+				// subsequent calls would attempt to call something on nil.
+				return nil, fmt.Errorf("calling '%s' returned nil, but it is not the last call in the chain", currentName)
+			}
+			if len(res) > 0 {
+				current = res[0]
+				currentName += "(...)"
+			}
+		}
+	}
+	return results, nil
 }
 
 func (e *Engine) evaluateVar(v ast.Var) ([]value.Value, error) {

@@ -27,31 +27,31 @@ function b()
 end
 
 function c()
-	error("message")
+	error("Message")
 end
 
 a()
 `))
 	suite.Len(results, 0)
-	suite.IsType(error_{}, err)
-	suite.Equal("message", err.(error_).message.(value.String).String())
-	suite.Equal([]stackFrame{
+	suite.IsType(Error{}, err)
+	suite.Equal("Message", err.(Error).Message.(value.String).String())
+	suite.Equal([]StackFrame{
 		{
-			name: "error",
+			Name: "error",
 		},
 		{
-			name: "c",
+			Name: "c",
 		},
 		{
-			name: "b",
+			Name: "b",
 		},
 		{
-			name: "a",
+			Name: "a",
 		},
 		{
-			name: "<unknown input>",
+			Name: "<unknown input>",
 		},
-	}, err.(error_).stack)
+	}, err.(Error).Stack)
 }
 
 func (suite *EngineSuite) TestStackOverflow() {
@@ -67,8 +67,8 @@ end
 infiniteRecursion()
 `))
 
-	suite.T().Logf("stack overflow took %s to occur", time.Since(start))
+	suite.T().Logf("Stack overflow took %s to occur", time.Since(start))
 
 	suite.Len(results, 0)
-	suite.EqualError(err, "stack overflow while calling 'infiniteRecursion'")
+	suite.EqualError(err, "Stack overflow while calling 'infiniteRecursion'")
 }

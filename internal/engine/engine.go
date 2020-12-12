@@ -81,6 +81,17 @@ func New(opts ...Option) *Engine {
 	return e
 }
 
+func (e *Engine) EvalFile(path string) ([]value.Value, error) {
+	file, err := e.fs.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("open %s: %w", path, err)
+	}
+	defer func() {
+		_ = file.Close()
+	}()
+	return e.Eval(file)
+}
+
 func (e *Engine) Eval(source io.Reader) ([]value.Value, error) {
 	p, err := parser.New(source)
 	if err != nil {
@@ -137,7 +148,7 @@ func (e *Engine) leaveScope() {
 	e.scopes = e.scopes[1:]
 }
 
-// variable searches for a variable with the given name, starting in the current
+// variable searches for a variable with the given Name, starting in the current
 // scope and always visiting the parent scope if there is no such variable.
 func (e *Engine) variable(name string) (value.Value, bool) {
 	for i := 0; i < len(e.scopes); i++ {
@@ -152,11 +163,11 @@ func (e *Engine) call(fn *value.Function, args ...value.Value) ([]value.Value, e
 	e.enterNewScope()
 	defer e.leaveScope()
 
-	if ok := e.stack.Push(stackFrame{
-		name: fn.Name,
+	if ok := e.stack.Push(StackFrame{
+		Name: fn.Name,
 	}); !ok {
-		_, _ = e.error(value.NewString(fmt.Sprintf("stack overflow while calling '%s'", fn.Name)))
-		return nil, fmt.Errorf("stack overflow")
+		_, _ = e.error(value.NewString(fmt.Sprintf("Stack overflow while calling '%s'", fn.Name)))
+		return nil, fmt.Errorf("Stack overflow")
 	}
 	defer e.stack.Pop()
 
