@@ -26,6 +26,17 @@ func (suite *EngineSuite) TestFunction() {
 		},
 	})
 }
+func (suite *EngineSuite) TestIf() {
+	suite.runFileTests("if", []fileTest{
+		{
+			"if01.lua",
+			nil,
+			"",
+			"Hello\tWorld\n",
+			"",
+		},
+	})
+}
 
 func (suite *EngineSuite) TestPcall() {
 	suite.runFileTests("pcall", []fileTest{
@@ -112,8 +123,10 @@ func (suite *EngineSuite) runFileTests(basePath string, tests []fileTest) {
 			defer func() { _ = file.Close() }()
 
 			gotResults, gotErr := engine.Eval(file)
-			if gotErr != nil || test.wantErr != "" {
-				suite.IsType(Error{}, gotErr)
+			if gotErr != nil {
+				if test.wantErr != "" {
+					suite.IsType(Error{}, gotErr)
+				}
 				suite.EqualErrorf(gotErr, test.wantErr, "%s", gotErr)
 			}
 			if len(gotResults) > 0 {
