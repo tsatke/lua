@@ -128,6 +128,61 @@ func (s *inMemoryScanner) checkWord(ahead string) bool {
 	return true
 }
 
+func (s *inMemoryScanner) checkNumber() bool {
+	i := 0
+	hasMore := func() bool {
+		return len(s.input) > s.pos+i
+	}
+	get := func() rune {
+		return s.input[s.pos+i]
+	}
+	consume := func() {
+		i++
+	}
+
+	var signed bool
+	// optional sign
+	if hasMore() && get() == '-' {
+		signed = true
+		consume() // consume the sign
+	}
+
+	// optional integral digits
+	for hasMore() && unicode.IsDigit(get()) {
+		consume()
+	}
+
+	// optional fractional part
+	if hasMore() && get() == '.' {
+		consume()
+
+		// optional fractional digits
+		for hasMore() && unicode.IsDigit(get()) {
+			consume()
+		}
+	}
+
+	// optional exponent part
+	if hasMore() && (get() == 'e' || get() == 'E') {
+		consume()
+		if !(hasMore() && unicode.IsDigit(get())) {
+			// no digit, require at least one digit after exponent indicator
+			return false
+		}
+		// optional exponent digits
+		for hasMore() && unicode.IsDigit(get()) {
+			consume()
+		}
+	}
+	if i == 0 || (i == 1 && signed) {
+		// if we didn't consume any runes or just one rune, but it was the sign,
+		// then this is not a number
+		return false
+	}
+	s.consumeN(i)
+	return true
+}
+
 func (s *inMemoryScanner) tkpos() token.Position {
 	return token.Position{
 		Line:   s.startLine,
@@ -273,17 +328,23 @@ start:
 			return s.token(token.Ellipsis), true
 		} else if s.check("..") {
 			return s.token(token.BinaryOperator), true
+		} else if s.checkNumber() {
+			return s.token(token.Number), true
 		} else if s.check(".") {
 			return s.token(token.Dot), true
 		}
 	case '+':
-		if s.check("+") {
+		if s.checkNumber() {
+			return s.token(token.Number), true
+		} else if s.check("+") {
 			return s.token(token.BinaryOperator), true
 		}
 	case '-':
 		if s.check("--") { // EOL-comment
 			s.skipRemainingLine() // ignore everything until line-end
 			goto start
+		} else if s.checkNumber() {
+			return s.token(token.Number), true
 		} else if s.check("-") {
 			return s.token(token.UnaryOperator, token.BinaryOperator), true
 		}
@@ -339,6 +400,10 @@ start:
 		}
 	case '"', '\'':
 		return s.string_()
+	case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
+		if s.checkNumber() {
+			return s.token(token.Number), true
+		}
 	}
 	// if none of these optimized lookaheads match, try this next
 	switch {

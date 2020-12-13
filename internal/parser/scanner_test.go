@@ -81,3 +81,22 @@ func (suite *ScannerSuite) TestConcatenatedTokens() {
 			token.New("and", token.Position{1, 47, 46}, token.And, token.BinaryOperator),
 		})
 }
+
+func (suite *ScannerSuite) TestNumbers() {
+	suite.assertTokensString(`1.5E7`,
+		[]token.Token{
+			token.New("1.5E7", token.Position{1, 1, 0}, token.Number),
+		})
+	suite.assertTokensString(`-1.5E7`,
+		[]token.Token{
+			token.New("-1.5E7", token.Position{1, 1, 0}, token.Number),
+		})
+	suite.assertTokensString(`-.5`,
+		[]token.Token{
+			token.New("-.5", token.Position{1, 1, 0}, token.Number),
+		})
+	suite.assertTokensString(`.3E9`,
+		[]token.Token{
+			token.New(".3E9", token.Position{1, 1, 0}, token.Number),
+		})
+}
