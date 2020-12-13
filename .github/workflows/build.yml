@@ -48,4 +48,7 @@ jobs:
         with:
           project: LUA
           issuetype: Bug
-          summary: Build failed for ${{ github.repository }}
+          summary: $GITHUB_WORKFLOW $GITHUB_ACTION failed for ${{ github.repository }}
+          description: |
+            It seems like $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/run/$GITHUB_RUN_ID failed.
+            Commit: $GITHUB_SHA
