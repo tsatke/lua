@@ -50,6 +50,7 @@ jobs:
           issuetype: Bug
           summary: ${{ github.workflow }} failed for ${{ github.repository }}
           description: |
-            It seems like https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }} failed.
-
+            It seems like the build for OS ${{ matrix.goos }} with ARCH ${{ matrix.goarch }} has failed.
+            
+            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
             Commit: ${{ github.sha }}
