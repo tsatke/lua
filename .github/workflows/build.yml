@@ -47,5 +47,5 @@ jobs:
             $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
           JIRA_ISSUE_SUMMARY: $GITHUB_WORKFLOW failure
           JIRA_ISSUE_TYPE: Bug
-          JIRA_PROJECT: LUA
+          JIRA_PROJECT: Lua
           JIRA_USERNAME: ${{ secrets.JIRA_USERNAME }}
