@@ -183,6 +183,14 @@ func (p *parser) stmt() ast.Statement {
 			return nil
 		}
 		return ifBlock
+	case tk.Is(token.Do):
+		p.stash(tk)
+		doBlock, ok := p.do()
+		if !ok {
+			p.collectError(fmt.Errorf("expected do block, but got nothing"))
+			return nil
+		}
+		return doBlock
 	case tk.Is(token.End):
 		// This is kind of a workaround.
 		// If we try to parse ay kind of block, it consists
@@ -193,6 +201,26 @@ func (p *parser) stmt() ast.Statement {
 	}
 	p.collectError(fmt.Errorf("unexpected token %s", tk))
 	return nil
+}
+
+func (p *parser) do() (ast.DoBlock, bool) {
+	if !p.requireToken(token.Do) {
+		return ast.DoBlock{}, false
+	}
+
+	block := p.block()
+	if block == nil {
+		p.collectError(ErrExpectedSomething("block"))
+		return ast.DoBlock{}, false
+	}
+
+	if !p.requireToken(token.End) {
+		return ast.DoBlock{}, false
+	}
+
+	return ast.DoBlock{
+		Do: block,
+	}, true
 }
 
 func (p *parser) if_() (ast.IfBlock, bool) {

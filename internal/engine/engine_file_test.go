@@ -8,6 +8,18 @@ import (
 	"github.com/tsatke/lua/internal/engine/value"
 )
 
+func (suite *EngineSuite) TestDo() {
+	suite.runFileTests("do", []fileTest{
+		{
+			"do01.lua",
+			nil,
+			"",
+			"Hello\nnil\n",
+			"",
+		},
+	})
+}
+
 func (suite *EngineSuite) TestFunction() {
 	suite.runFileTests("function", []fileTest{
 		{

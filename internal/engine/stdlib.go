@@ -251,6 +251,10 @@ func (e *Engine) tostring(args ...Value) ([]Value, error) {
 		return nil, fmt.Errorf("need one argument to 'tostring'")
 	}
 
+	if args[0] == nil {
+		return values(NewString("nil")), nil
+	}
+
 	value := args[0]
 	switch value.Type() {
 	case TypeNil:

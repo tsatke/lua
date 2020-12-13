@@ -33,6 +33,9 @@ func (e *Engine) evaluateChunk(chunk ast.Chunk) (vs []value.Value, err error) {
 }
 
 func (e *Engine) evaluateBlock(block ast.Block) ([]value.Value, error) {
+	e.enterNewScope()
+	defer e.leaveScope()
+
 	for _, stmt := range block.StatementsWithoutLast() {
 		if _, err := e.evaluateStatement(stmt); err != nil {
 			return nil, fmt.Errorf("statement %T: %w", stmt, err)
@@ -62,6 +65,8 @@ func (e *Engine) evaluateStatement(stmt ast.Statement) ([]value.Value, error) {
 		return e.evaluateFunction(s)
 	case ast.IfBlock:
 		return e.evaluateIfBlock(s)
+	case ast.DoBlock:
+		return e.evaluateDoBlock(s)
 	}
 	return nil, fmt.Errorf("%T unsupported", stmt)
 }
@@ -103,6 +108,10 @@ func (e *Engine) evaluateIfBlock(block ast.IfBlock) ([]value.Value, error) {
 		return e.evaluateBlock(block.Else)
 	}
 	return nil, nil
+}
+
+func (e *Engine) evaluateDoBlock(block ast.DoBlock) ([]value.Value, error) {
+	return e.evaluateBlock(block.Do)
 }
 
 func (e *Engine) evaluateFunction(decl ast.Function) ([]value.Value, error) {
