@@ -48,7 +48,8 @@ jobs:
         with:
           project: LUA
           issuetype: Bug
-          summary: ${{ github.workflow }} ${{ github.action }} failed for ${{ github.repository }}
+          summary: ${{ github.workflow }} failed for ${{ github.repository }}
           description: |
-            It seems like https://github.com/${{ github.repository }}/actions/run/${{ github.run_id }} failed.
+            It seems like https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }} failed.
+            
             Commit: ${{ github.sha }}
