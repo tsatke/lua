@@ -198,8 +198,13 @@ func (e *Engine) evaluateAssignment(assignment ast.Assignment) error {
 		amount = expAmount
 	}
 
+	expressions, err := e.evaluateExpList(assignment.ExpList)
+	if err != nil {
+		return fmt.Errorf("explist: %w", err)
+	}
+
 	for i := 0; i < amount; i++ {
-		if err := e.evaluateAssign(assignment.VarList[i], assignment.ExpList[i]); err != nil {
+		if err := e.evaluateAssign(assignment.VarList[i], expressions[i]); err != nil {
 			return fmt.Errorf("assign: %w", err)
 		}
 	}
@@ -207,16 +212,12 @@ func (e *Engine) evaluateAssignment(assignment ast.Assignment) error {
 	return nil
 }
 
-func (e *Engine) evaluateAssign(v ast.Var, exp ast.Exp) error {
+func (e *Engine) evaluateAssign(v ast.Var, val value.Value) error {
 	if v.Name == nil {
 		return fmt.Errorf("can only assign to simple variable")
 	}
 
 	name := v.Name.Value()
-	vals, err := e.evaluateExpression(exp)
-	if err != nil {
-		return fmt.Errorf("expression: %w", err)
-	}
 	scope := e._G
 	// if the variable is already declared in the current scope (either
 	// we are currently in the global scope, or the variable has been declared
@@ -224,7 +225,7 @@ func (e *Engine) evaluateAssign(v ast.Var, exp ast.Exp) error {
 	if _, ok := e.currentScope().Fields[name]; ok {
 		scope = e.currentScope()
 	}
-	e.assign(scope, name, vals[0])
+	e.assign(scope, name, val)
 	return nil
 }
 

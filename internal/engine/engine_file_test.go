@@ -20,6 +20,18 @@ func (suite *EngineSuite) TestDo() {
 	})
 }
 
+func (suite *EngineSuite) TestAssign() {
+	suite.runFileTests("assign", []fileTest{
+		{
+			"assign01.lua",
+			nil,
+			"",
+			"b\ta\n",
+			"",
+		},
+	})
+}
+
 func (suite *EngineSuite) TestFunction() {
 	suite.runFileTests("function", []fileTest{
 		{
