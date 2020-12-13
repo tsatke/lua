@@ -156,6 +156,11 @@ func (s *inMemoryScanner) checkNumber() bool {
 	if hasMore() && get() == '.' {
 		consume()
 
+		if !(hasMore() && unicode.IsDigit(get())) {
+			// no digit, require at least one digit after decimal point
+			return false
+		}
+
 		// optional fractional digits
 		for hasMore() && unicode.IsDigit(get()) {
 			consume()
@@ -165,10 +170,12 @@ func (s *inMemoryScanner) checkNumber() bool {
 	// optional exponent part
 	if hasMore() && (get() == 'e' || get() == 'E') {
 		consume()
+
 		if !(hasMore() && unicode.IsDigit(get())) {
 			// no digit, require at least one digit after exponent indicator
 			return false
 		}
+
 		// optional exponent digits
 		for hasMore() && unicode.IsDigit(get()) {
 			consume()
