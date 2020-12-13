@@ -45,9 +45,11 @@ type (
 		Else   Block
 	}
 
-	// ElseIf is an IfBlock, that was produced by another
-	// grammar production.
-	ElseIf IfBlock
+	// ElseIf is a Lua elseif construct.
+	ElseIf struct {
+		If   Exp
+		Then Block
+	}
 
 	// ForBlock is a Lua for construct, using the production from,to,step.
 	ForBlock struct {

@@ -60,8 +60,49 @@ func (e *Engine) evaluateStatement(stmt ast.Statement) ([]value.Value, error) {
 		return e.evaluateFunctionCall(s)
 	case ast.Function:
 		return e.evaluateFunction(s)
+	case ast.IfBlock:
+		return e.evaluateIfBlock(s)
 	}
 	return nil, fmt.Errorf("%T unsupported", stmt)
+}
+
+func (e *Engine) evaluateIfBlock(block ast.IfBlock) ([]value.Value, error) {
+	// if
+	ifConds, err := e.evaluateExpression(block.If)
+	if err != nil {
+		return nil, fmt.Errorf("expression: %w", err)
+	}
+	var ifCond value.Value
+	if len(ifConds) > 0 {
+		ifCond = ifConds[0]
+	}
+	if !(ifCond == nil || ifCond == value.False || ifCond == value.Nil) {
+		return e.evaluateBlock(block.Then)
+	}
+
+	// elseif (all of them)
+	for i, elseIf := range block.ElseIf {
+		conds, err := e.evaluateExpression(elseIf.If)
+		if err != nil {
+			return nil, fmt.Errorf("elseif[%d] expression: %w", i, err)
+		}
+		var cond value.Value
+		if len(conds) > 0 {
+			cond = conds[0]
+		}
+		if !(cond == nil || cond == value.False || cond == value.Nil) {
+			return e.evaluateBlock(elseIf.Then)
+		}
+	}
+
+	// else
+	if len(block.ElseIf) > 0 {
+		panic("elseif is not supported yet")
+	}
+	if block.Else != nil {
+		return e.evaluateBlock(block.Else)
+	}
+	return nil, nil
 }
 
 func (e *Engine) evaluateFunction(decl ast.Function) ([]value.Value, error) {
@@ -239,11 +280,7 @@ func (e *Engine) evaluatePrefixExpression(exp ast.PrefixExp) ([]value.Value, err
 		}
 	} else {
 		name := exp.Name.Value()
-		var ok bool
-		current, ok = e.variable(name)
-		if !ok {
-			return nil, fmt.Errorf("no such variable '%s'", name)
-		}
+		current, _ = e.variable(name) // we don't care whether or not the variable exists, and in case of fragments, the loop below will handle nil values
 		currentName = name
 	}
 
