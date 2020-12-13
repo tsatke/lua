@@ -26,6 +26,19 @@ func (suite *EngineSuite) TestFunction() {
 		},
 	})
 }
+
+func (suite *EngineSuite) TestSelect() {
+	suite.runFileTests("select", []fileTest{
+		{
+			"select01.lua",
+			nil,
+			"",
+			"3\n",
+			"",
+		},
+	})
+}
+
 func (suite *EngineSuite) TestIf() {
 	suite.runFileTests("if", []fileTest{
 		{

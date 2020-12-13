@@ -1,0 +1,1 @@
+print(select("#", "a", "b", "c"))

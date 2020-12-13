@@ -2,9 +2,11 @@ package engine
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"runtime"
 	"runtime/debug"
+	"strconv"
 
 	. "github.com/tsatke/lua/internal/engine/value"
 )
@@ -15,10 +17,14 @@ func (e *Engine) initStdlib() {
 	}
 	e.assign(e._G, "_VERSION", NewString("Lua 5.3"))
 	register(NewFunction("assert", e.assert))
+	register(NewFunction("collectgarbage", e.collectgarbage))
 	register(NewFunction("dofile", e.dofile))
 	register(NewFunction("error", e.error))
+	register(NewFunction("getmetatable", e.getmetatable))
 	register(NewFunction("pcall", e.pcall))
 	register(NewFunction("print", e.print))
+	register(NewFunction("select", e.select_))
+	register(NewFunction("setmetatable", e.setmetatable))
 	register(NewFunction("tostring", e.tostring))
 	register(NewFunction("type", e.type_))
 }
@@ -185,6 +191,35 @@ func (e *Engine) print(args ...Value) ([]Value, error) {
 	return nil, nil
 }
 
+func (e *Engine) select_(args ...Value) ([]Value, error) {
+	if len(args) == 0 {
+		return nil, fmt.Errorf("need at least one argument to 'select'")
+	}
+	if str, ok := args[0].(String); ok && str == "#" {
+		return values(NewNumber(float64(len(args) - 1))), nil
+	} else if ok {
+		return nil, fmt.Errorf("if the first argument to 'select' is a string, it must be the string '#'")
+	}
+
+	num, ok := args[0].(Number)
+	if !ok {
+		return nil, fmt.Errorf("bad argument #1 to 'select' (%s expected, got %s", TypeNumber, args[0].Type())
+	}
+	if float64(num) != math.Trunc(float64(num)) {
+		return nil, fmt.Errorf("number %f has no integral representation", float64(num))
+	}
+
+	selection := int(num)
+	if selection < 0 {
+		return args[len(args)-selection:], nil
+	}
+	fromIndex := selection + 1
+	if fromIndex > len(args) {
+		fromIndex = len(args)
+	}
+	return args[fromIndex:], nil
+}
+
 func (e *Engine) setmetatable(args ...Value) ([]Value, error) {
 	if len(args) != 2 {
 		return nil, fmt.Errorf("need two arguments to 'setmetatable'")
@@ -229,6 +264,8 @@ func (e *Engine) tostring(args ...Value) ([]Value, error) {
 		return values(value), nil
 	case TypeFunction:
 		return values(NewString("function " + value.(Function).Name)), nil
+	case TypeNumber:
+		return values(NewString(strconv.FormatFloat(float64(value.(Number)), 'G', -1, 64))), nil
 	}
 	return nil, fmt.Errorf("unsupported type %s", value.Type())
 }
