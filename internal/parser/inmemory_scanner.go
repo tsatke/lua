@@ -414,6 +414,10 @@ start:
 		if s.checkNumber() {
 			return s.token(token.Number), true
 		}
+	case ';':
+		if s.check(";") {
+			return s.token(token.SemiColon), true
+		}
 	}
 	// if none of these optimized lookaheads match, try this next
 	switch {

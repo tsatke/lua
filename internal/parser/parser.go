@@ -102,6 +102,18 @@ func (p *parser) block() ast.Block {
 }
 
 func (p *parser) stmt() ast.Statement {
+	defer func() {
+		// optional semicolon after a statement
+		next, ok := p.next()
+		if !ok {
+			return
+		}
+		if !next.Is(token.SemiColon) {
+			p.stash(next)
+		}
+		return
+	}()
+
 	tk, ok := p.next()
 	if !ok {
 		return nil

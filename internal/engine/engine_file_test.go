@@ -32,6 +32,18 @@ func (suite *EngineSuite) TestAssign() {
 	})
 }
 
+func (suite *EngineSuite) TestSemicolon() {
+	suite.runFileTests("semicolon", []fileTest{
+		{
+			"semicolon01.lua",
+			nil,
+			"",
+			"nil\nnil\nnil\n",
+			"",
+		},
+	})
+}
+
 func (suite *EngineSuite) TestFunction() {
 	suite.runFileTests("function", []fileTest{
 		{
