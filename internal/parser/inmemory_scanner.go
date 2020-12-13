@@ -360,6 +360,9 @@ start:
 			return s.token(token.BinaryOperator), true
 		}
 	case '/':
+		if s.check("//") {
+			return s.token(token.BinaryOperator), true
+		}
 		if s.check("/") {
 			return s.token(token.BinaryOperator), true
 		}

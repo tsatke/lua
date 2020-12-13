@@ -32,7 +32,7 @@ func (suite *ScannerSuite) TestKeywordTypes() {
 }
 
 func (suite *ScannerSuite) TestOperatorTypes() {
-	suite.assertTokensString("+ - * / ^ % .. < <= > >= == ~= #",
+	suite.assertTokensString("+ - * / ^ % .. < <= > >= == ~= # //",
 		[]token.Token{
 			token.New("+", token.Position{1, 1, 0}, token.BinaryOperator),
 			token.New("-", token.Position{1, 3, 2}, token.UnaryOperator, token.BinaryOperator),
@@ -48,6 +48,7 @@ func (suite *ScannerSuite) TestOperatorTypes() {
 			token.New("==", token.Position{1, 26, 25}, token.BinaryOperator),
 			token.New("~=", token.Position{1, 29, 28}, token.BinaryOperator),
 			token.New("#", token.Position{1, 32, 31}, token.UnaryOperator),
+			token.New("//", token.Position{1, 34, 33}, token.BinaryOperator),
 		})
 }
 
