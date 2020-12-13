@@ -4,7 +4,6 @@ import (
 	"github.com/spf13/afero"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/tsatke/lua/internal/engine"
@@ -32,8 +31,10 @@ func NewEngine(opts ...Option) Engine {
 		opt(&e)
 	}
 
-	sysWd, _ := os.Getwd()
-	e.workingDir = filepath.Join(sysWd, e.workingDir)
+	if e.workingDir == "" {
+		sysWd, _ := os.Getwd()
+		e.workingDir = sysWd
+	}
 
 	e.engine = engine.New(
 		engine.WithStdin(e.stdin),
