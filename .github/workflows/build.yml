@@ -35,3 +35,22 @@ jobs:
         with:
           name: binaries_${{ matrix.goos }}_${{ matrix.goarch }}
           path: ./bin
+      - name: Login to Jira
+        uses: atlassian/gajira-login@master
+        if: failure()
+        env:
+          JIRA_BASE_URL: https://crushit.atlassian.net
+          JIRA_USER_EMAIL: ${{ secrets.JIRA_USERNAME }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+      - name: Create Jira issue on job failure
+        uses: atlassian/gajira-create@master
+        if: failure()
+        with:
+          project: LUA
+          issuetype: Bug
+          summary: ${{ github.workflow }} failed for ${{ github.repository }}
+          description: |
+            It seems like the build for OS ${{ matrix.goos }} with ARCH ${{ matrix.goarch }} has failed.
+            
+            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            Commit: ${{ github.sha }}
