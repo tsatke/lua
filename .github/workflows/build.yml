@@ -37,14 +37,14 @@ jobs:
           path: ./bin
       - name: Login to Jira
         uses: atlassian/gajira-login@master
-        if: failure()
+        if: success()
         env:
           JIRA_BASE_URL: https://crushit.atlassian.net
           JIRA_USER_EMAIL: ${{ secrets.JIRA_USERNAME }}
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
       - name: Create Jira issue on job failure
         uses: atlassian/gajira-create@master
-        if: failure()
+        if: success()
         with:
           project: LUA
           issuetype: Bug
