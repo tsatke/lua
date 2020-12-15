@@ -4,6 +4,19 @@ import (
 	"github.com/tsatke/lua/internal/token"
 )
 
+func (suite *ScannerSuite) TestEmptyInput() {
+	suite.assertTokensString(``, []token.Token{})
+}
+
+func (suite *ScannerSuite) TestSmallInput() {
+	suite.assertTokensString(`a`, []token.Token{
+		token.New("a", token.Position{1, 1, 0}, token.Name),
+	})
+	suite.assertTokensString(`brea`, []token.Token{
+		token.New("brea", token.Position{1, 1, 0}, token.Name),
+	})
+}
+
 func (suite *ScannerSuite) TestKeywordTypes() {
 	suite.assertTokensString("and break do else elseif end false for function if in local nil not or repeat return then true until while",
 		[]token.Token{
@@ -99,5 +112,43 @@ func (suite *ScannerSuite) TestNumbers() {
 	suite.assertTokensString(`.3E9`,
 		[]token.Token{
 			token.New(".3E9", token.Position{1, 1, 0}, token.Number),
+		})
+}
+
+func (suite *ScannerSuite) TestStrings() {
+	suite.assertTokensString(`'a' "b" [[c]]`,
+		[]token.Token{
+			token.New("a", token.Position{1, 1, 0}, token.String),
+			token.New("b", token.Position{1, 5, 4}, token.String),
+			token.New("c", token.Position{1, 9, 8}, token.String),
+		})
+
+	suite.assertTokensString(`'a' "b" [[
+c]]`,
+		[]token.Token{
+			token.New("a", token.Position{1, 1, 0}, token.String),
+			token.New("b", token.Position{1, 5, 4}, token.String),
+			token.New("c", token.Position{1, 9, 8}, token.String),
+		})
+
+	suite.assertTokensString(`'a' "b" [[
+c
+]]`,
+		[]token.Token{
+			token.New("a", token.Position{1, 1, 0}, token.String),
+			token.New("b", token.Position{1, 5, 4}, token.String),
+			token.New("c\n", token.Position{1, 9, 8}, token.String),
+		})
+
+	suite.assertTokensString(`[[a]] [=[b]=] [===[foobar]===]`,
+		[]token.Token{
+			token.New("a", token.Position{1, 1, 0}, token.String),
+			token.New("b", token.Position{1, 7, 6}, token.String),
+			token.New("foobar", token.Position{1, 15, 14}, token.String),
+		})
+
+	suite.assertTokensString(`[============================================================================[whatever]============================================================================]`,
+		[]token.Token{
+			token.New("whatever", token.Position{1, 1, 0}, token.String),
 		})
 }

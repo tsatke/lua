@@ -19,7 +19,7 @@ print("Hello, World!")
 							Args: &ast.Args{
 								ExpList: []ast.Exp{
 									ast.SimpleExp{
-										String: token.New(`"Hello, World!"`, token.Position{2, 7, 7}, token.String),
+										String: token.New("Hello, World!", token.Position{2, 7, 7}, token.String),
 									},
 								},
 							},
@@ -49,7 +49,7 @@ io.stderr:write("foobar")
 							Args: &ast.Args{
 								ExpList: []ast.Exp{
 									ast.SimpleExp{
-										String: token.New(`"foobar"`, token.Position{2, 17, 17}, token.String),
+										String: token.New("foobar", token.Position{2, 17, 17}, token.String),
 									},
 								},
 							},
@@ -146,7 +146,7 @@ print(pcall(print, "print message"))
 															Name: token.New("print", token.Position{2, 13, 13}, token.Name),
 														},
 														ast.SimpleExp{
-															String: token.New(`"print message"`, token.Position{2, 20, 20}, token.String),
+															String: token.New("print message", token.Position{2, 20, 20}, token.String),
 														},
 													},
 												},

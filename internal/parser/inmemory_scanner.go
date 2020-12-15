@@ -10,7 +10,7 @@ import (
 )
 
 type inMemoryScanner struct {
-	input []rune
+	input []byte
 
 	state
 }
@@ -21,9 +21,8 @@ func newInMemoryScanner(source io.Reader) (*inMemoryScanner, error) {
 		return nil, fmt.Errorf("read all: %w", err)
 	}
 
-	runes := []rune(string(data))
 	return &inMemoryScanner{
-		input: runes,
+		input: data,
 		state: state{
 			startLine: 1,
 			startCol:  1,
@@ -71,7 +70,7 @@ func (s *inMemoryScanner) done() bool {
 	return s.pos >= len(s.input)
 }
 
-func (s *inMemoryScanner) lookahead() (rune, bool) {
+func (s *inMemoryScanner) lookahead() (byte, bool) {
 	if !s.done() {
 		return s.input[s.pos], true
 	}
@@ -94,28 +93,50 @@ func (s *inMemoryScanner) consumeN(n int) {
 	}
 }
 
+func (s *inMemoryScanner) hasMore(n int) bool {
+	return len(s.input) >= s.pos+n
+}
+
 func (s *inMemoryScanner) check(ahead string) bool {
 	runes := []rune(ahead)
-	for i, r := range runes {
-		if r != s.input[s.pos+i] {
+	if s.ahead(ahead) {
+		s.consumeN(len(runes))
+		return true
+	}
+	return false
+}
+
+func (s *inMemoryScanner) ahead(ahead string) bool {
+	bytes := []byte(ahead)
+
+	if !s.hasMore(len(bytes)) {
+		return false
+	}
+
+	for i, b := range bytes {
+		if b != s.input[s.pos+i] {
 			return false
 		}
 	}
-	s.consumeN(len(runes))
 	return true
 }
 
 func (s *inMemoryScanner) checkWord(ahead string) bool {
-	runes := []rune(ahead)
-	for i, r := range runes {
-		if r != s.input[s.pos+i] {
+	bytes := []byte(ahead)
+
+	if !s.hasMore(len(bytes)) {
+		return false
+	}
+
+	for i, b := range bytes {
+		if b != s.input[s.pos+i] {
 			return false
 		}
 	}
 
-	if len(s.input) > s.pos+len(runes) {
-		r := s.input[s.pos+len(runes)]
-		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' {
+	if len(s.input) > s.pos+len(bytes) {
+		b := s.input[s.pos+len(bytes)]
+		if unicode.IsLetter(rune(b)) || unicode.IsDigit(rune(b)) || b == '_' {
 			/*
 				Assuming that ahead is e.g. 'and', we can't match a variable name like
 				'and_this_is_my_var', or 'andThis', which is, why we check if the word
@@ -124,16 +145,16 @@ func (s *inMemoryScanner) checkWord(ahead string) bool {
 			return false
 		}
 	}
-	s.consumeN(len(runes))
+	s.consumeN(len(bytes))
 	return true
 }
 
 func (s *inMemoryScanner) checkNumber() bool {
 	i := 0
 	hasMore := func() bool {
-		return len(s.input) > s.pos+i
+		return s.hasMore(i + 1)
 	}
-	get := func() rune {
+	get := func() byte {
 		return s.input[s.pos+i]
 	}
 	consume := func() {
@@ -148,7 +169,7 @@ func (s *inMemoryScanner) checkNumber() bool {
 	}
 
 	// optional integral digits
-	for hasMore() && unicode.IsDigit(get()) {
+	for hasMore() && unicode.IsDigit(rune(get())) {
 		consume()
 	}
 
@@ -156,13 +177,13 @@ func (s *inMemoryScanner) checkNumber() bool {
 	if hasMore() && get() == '.' {
 		consume()
 
-		if !(hasMore() && unicode.IsDigit(get())) {
+		if !(hasMore() && unicode.IsDigit(rune(get()))) {
 			// no digit, require at least one digit after decimal point
 			return false
 		}
 
 		// optional fractional digits
-		for hasMore() && unicode.IsDigit(get()) {
+		for hasMore() && unicode.IsDigit(rune(get())) {
 			consume()
 		}
 	}
@@ -171,13 +192,13 @@ func (s *inMemoryScanner) checkNumber() bool {
 	if hasMore() && (get() == 'e' || get() == 'E') {
 		consume()
 
-		if !(hasMore() && unicode.IsDigit(get())) {
+		if !(hasMore() && unicode.IsDigit(rune(get()))) {
 			// no digit, require at least one digit after exponent indicator
 			return false
 		}
 
 		// optional exponent digits
-		for hasMore() && unicode.IsDigit(get()) {
+		for hasMore() && unicode.IsDigit(rune(get())) {
 			consume()
 		}
 	}
@@ -201,7 +222,7 @@ func (s *inMemoryScanner) tkpos() token.Position {
 func (s *inMemoryScanner) drainWhitespace() {
 	for {
 		r, ok := s.lookahead()
-		if !(ok && unicode.IsSpace(r)) {
+		if !(ok && unicode.IsSpace(rune(r))) {
 			break
 		}
 		s.consume()
@@ -228,7 +249,7 @@ func (s *inMemoryScanner) computeNext() (token.Token, bool) {
 start:
 	if s.pos == 0 {
 		// skip shebang
-		if s.check("#!") {
+		if len(s.input) > 1 && s.check("#!") {
 			s.skipRemainingLine()
 		}
 	}
@@ -315,7 +336,9 @@ start:
 			return s.token(token.ParRight), true
 		}
 	case '[':
-		if s.check("[") {
+		if s.ahead("[[") || s.ahead("[=") {
+			return s.multilineString()
+		} else if s.check("[") {
 			return s.token(token.BracketLeft), true
 		}
 	case ']':
@@ -409,7 +432,7 @@ start:
 			return s.token(token.Colon), true
 		}
 	case '"', '\'':
-		return s.string_()
+		return s.quotedString()
 	case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 		if s.checkNumber() {
 			return s.token(token.Number), true
@@ -421,14 +444,14 @@ start:
 	}
 	// if none of these optimized lookaheads match, try this next
 	switch {
-	case unicode.IsLetter(s.input[s.pos]) || s.input[s.pos] == '_':
+	case unicode.IsLetter(rune(s.input[s.pos])) || s.input[s.pos] == '_':
 		return s.ident()
 	}
 	return s.error(fmt.Errorf("unexpected rune %s", string(s.input[s.pos]))), false
 }
 
-func (s *inMemoryScanner) string_() (token.Token, bool) {
-	var delimiter rune
+func (s *inMemoryScanner) quotedString() (token.Token, bool) {
+	var delimiter byte
 	if s.check("\"") {
 		delimiter = '"'
 	} else if s.check("'") {
@@ -448,15 +471,61 @@ func (s *inMemoryScanner) string_() (token.Token, bool) {
 	if !complete {
 		return s.error(fmt.Errorf("incomplete string %s<EOF>", s.candidate())), false
 	}
-	return s.token(token.String), true
+
+	content := s.candidate()
+	content = content[1 : len(content)-1]
+	return token.New(content, s.tkpos(), token.String), true
+}
+
+func (s *inMemoryScanner) multilineString() (token.Token, bool) {
+	next, ok := s.lookahead()
+	if !ok {
+		return s.error(io.ErrUnexpectedEOF), false
+	}
+	if next != '[' {
+		return s.error(fmt.Errorf("long bracket must start with '[', but got '%s'", string(next))), false
+	}
+	s.consume()
+
+	var longLevel int
+	for next, ok = s.lookahead(); next == '='; next, ok = s.lookahead() {
+		longLevel++
+		s.consume()
+	}
+
+	next, ok = s.lookahead()
+	if !ok {
+		return s.error(io.ErrUnexpectedEOF), false
+	}
+	if next != '[' {
+		return s.error(fmt.Errorf("long bracket must start with '[[' or '[=...=[', but got '%s' instead of a second bracket", string(next))), false
+	}
+	s.consume()
+
+	equalSigns := make([]byte, longLevel)
+	for i := range equalSigns {
+		equalSigns[i] += '='
+	}
+	closingDelimiter := "]" + string(equalSigns) + "]"
+
+	for !s.check(closingDelimiter) {
+		s.consume()
+	}
+
+	content := s.candidate()
+	content = content[len(closingDelimiter) : len(content)-len(closingDelimiter)]
+	if content[0] == '\n' {
+		content = content[1:]
+	}
+	return token.New(content, s.tkpos(), token.String), true
 }
 
 func (s *inMemoryScanner) ident() (token.Token, bool) {
 	first, ok := s.lookahead()
 	if !ok {
-		return nil, false
+		return s.error(io.ErrUnexpectedEOF), false
 	}
-	if !(unicode.IsLetter(first) || first == '_') {
+	if !(unicode.IsLetter(rune(first)) || first == '_') {
 		return s.error(fmt.Errorf("expected letter or underscore, but got %s", string(first))), false
 	}
 	s.consume()
@@ -465,7 +534,7 @@ func (s *inMemoryScanner) ident() (token.Token, bool) {
 		if !ok {
 			break
 		}
-		if !(unicode.IsLetter(next) || unicode.IsDigit(next) || next == '_') {
+		if !(unicode.IsLetter(rune(next)) || unicode.IsDigit(rune(next)) || next == '_') {
 			break
 		}
 		s.consume()

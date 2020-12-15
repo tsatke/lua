@@ -9,13 +9,11 @@ import (
 	"github.com/tsatke/lua/internal/token"
 )
 
-func TestScannerSuite(t *testing.T) {
-	t.Run("type=inmemory", func(t *testing.T) {
-		suite.Run(t, &ScannerSuite{
-			scannerGenerator: func(rd io.Reader) (scanner, error) {
-				return newInMemoryScanner(rd)
-			},
-		})
+func TestScannerSuiteInMemory(t *testing.T) {
+	suite.Run(t, &ScannerSuite{
+		scannerGenerator: func(rd io.Reader) (scanner, error) {
+			return newInMemoryScanner(rd)
+		},
 	})
 }
 
@@ -30,39 +28,41 @@ func (suite *ScannerSuite) assertTokensString(input string, tokens []token.Token
 }
 
 func (suite *ScannerSuite) assertTokens(source io.Reader, expected []token.Token) {
-	sc, err := suite.scannerGenerator(source)
-	suite.NoError(err)
+	suite.Run("tokens", func() {
+		sc, err := suite.scannerGenerator(source)
+		suite.NoError(err)
 
-	got := make([]token.Token, 0)
-	var tk token.Token
-	ok := true
-	for ok {
-		tk, ok = sc.next()
-		if tk != nil {
-			got = append(got, tk)
-			if tk.Is(token.Error) {
-				suite.Failf("received error token", "(%s) %s", tk.Pos(), tk.Value())
+		got := make([]token.Token, 0)
+		var tk token.Token
+		ok := true
+		for ok {
+			tk, ok = sc.next()
+			if tk != nil {
+				got = append(got, tk)
+				if tk.Is(token.Error) {
+					suite.Failf("received error token", "(%s) %s", tk.Pos(), tk.Value())
+				}
+			}
+			if !ok {
+				break
 			}
 		}
-		if !ok {
-			break
+
+		for _, next := range got {
+			suite.T().Logf("%s", next)
 		}
-	}
 
-	for _, next := range got {
-		suite.T().Logf("%s", next)
-	}
+		suite.Equalf(len(expected), len(got), "did not receive as much got as expected (expected %d, but got %d)", len(expected), len(got))
 
-	suite.Equalf(len(expected), len(got), "did not receive as much got as expected (expected %d, but got %d)", len(expected), len(got))
-
-	limit := len(expected)
-	if len(got) < limit {
-		limit = len(got)
-	}
-	suite.NotNil(got)
-	for i := 0; i < limit; i++ {
-		suite.Equal(expected[i].Pos(), got[i].Pos(), "Position doesn't match")
-		suite.EqualValues(expected[i].Types(), got[i].Types(), "Types don't match, expected %v, but got %v", expected[i].Types(), got[i].Types())
-		suite.Equal(expected[i].Value(), got[i].Value(), "String_ doesn't match")
-	}
+		limit := len(expected)
+		if len(got) < limit {
+			limit = len(got)
+		}
+		suite.NotNil(got)
+		for i := 0; i < limit; i++ {
+			suite.Equal(expected[i].Pos(), got[i].Pos(), "Position doesn't match")
+			suite.EqualValues(expected[i].Types(), got[i].Types(), "Types don't match, expected %v, but got %v", expected[i].Types(), got[i].Types())
+			suite.Equal(expected[i].Value(), got[i].Value(), "String_ doesn't match")
+		}
+	})
 }

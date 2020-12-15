@@ -25,7 +25,7 @@ func (e *Engine) evaluateChunk(chunk ast.Chunk) (vs []value.Value, err error) {
 		Name: chunk.Name,
 	}); !ok {
 		_, _ = e.error(value.NewString("Stack overflow while evaluating chunk"))
-		return nil, fmt.Errorf("Stack overflow")
+		return nil, fmt.Errorf("stack overflow")
 	}
 	defer e.stack.Pop()
 
@@ -167,7 +167,7 @@ func (e *Engine) evaluateArgs(args ast.Args) ([]value.Value, error) {
 	}
 
 	if args.String != nil {
-		return []value.Value{value.NewString(stringTokenToString(args.String))}, nil
+		return []value.Value{value.NewString(args.String.Value())}, nil
 	}
 	if args.ExpList != nil {
 		vals, err := e.evaluateExpList(args.ExpList)
@@ -370,12 +370,7 @@ func (e *Engine) evaluateVar(v ast.Var) ([]value.Value, error) {
 func (e *Engine) evaluateSimpleExpression(exp ast.SimpleExp) (value.Value, error) {
 	switch {
 	case exp.String != nil:
-		return value.NewString(stringTokenToString(exp.String)), nil
+		return value.NewString(exp.String.Value()), nil
 	}
 	return nil, fmt.Errorf("%T unsupported", exp)
-}
-
-func stringTokenToString(token token.Token) string {
-	val := token.Value()
-	return val[1 : len(val)-1]
 }
