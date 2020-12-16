@@ -60,6 +60,27 @@ func (suite *EngineSuite) TestFunction() {
 			"bye\nhello\n",
 			"",
 		},
+		{
+			"function03.lua",
+			nil,
+			"",
+			"Hello, World!\n",
+			"",
+		},
+	})
+}
+
+func (suite *EngineSuite) TestReturn() {
+	suite.runFileTests("return", []fileTest{
+		{
+			"return01.lua",
+			[]value.Value{
+				value.NewString("hello"),
+			},
+			"",
+			"",
+			"",
+		},
 	})
 }
 
@@ -178,8 +199,33 @@ func (suite *EngineSuite) runFileTests(basePath string, tests []fileTest) {
 				}
 				suite.EqualErrorf(gotErr, test.wantErr, "%s", gotErr)
 			}
-			if len(gotResults) > 0 {
-				panic("results not yet supported")
+
+			suite.Equal(len(test.wantResults), len(gotResults), "amount of results not equal")
+			resultsLen := len(test.wantResults)
+			if len(gotResults) < resultsLen {
+				resultsLen = len(gotResults)
+			}
+
+			for i := 0; i < resultsLen; i++ {
+				expected := test.wantResults[i]
+				got := gotResults[i]
+				suite.Equal(expected.Type(), got.Type(), "expected %s, but got %s", expected.Type(), got.Type())
+				if expected.Type() != got.Type() {
+					continue
+				}
+				switch expected.Type() {
+				case value.TypeString:
+					suite.EqualValues(expected.(value.String), got.(value.String))
+					suite.Equal(expected.(value.String).String(), got.(value.String).String())
+				case value.TypeNumber:
+					suite.EqualValues(expected.(value.Number), got.(value.Number))
+					suite.Equal(expected.(value.Number).Value(), got.(value.Number).Value())
+				case value.TypeBoolean:
+					suite.EqualValues(expected.(value.Boolean), got.(value.Boolean))
+					suite.Equal(expected.(value.Boolean).String(), got.(value.Boolean).String())
+				default:
+					suite.Failf("unsupported type", "type %s not supported yet", expected.Type())
+				}
 			}
 
 			suite.Equal(test.wantStdout, stdout.String())

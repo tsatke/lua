@@ -20,11 +20,11 @@ type ParserSuite struct {
 	suite.Suite
 }
 
-func (suite *ParserSuite) assertBlockString(input string, expected ast.Chunk) {
-	suite.assertBlock(strings.NewReader(input), expected)
+func (suite *ParserSuite) assertChunkString(input string, expected ast.Chunk) {
+	suite.assertChunk(strings.NewReader(input), expected)
 }
 
-func (suite *ParserSuite) assertBlock(source io.Reader, expected ast.Chunk) {
+func (suite *ParserSuite) assertChunk(source io.Reader, expected ast.Chunk) {
 	parser, err := New(source)
 	suite.NoError(err)
 

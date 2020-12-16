@@ -98,6 +98,21 @@ func (p *parser) block() ast.Block {
 	for stmt := p.stmt(); stmt != nil; stmt = p.stmt() {
 		block = append(block, stmt)
 	}
+	next, ok := p.next()
+	if ok {
+		switch {
+		case next.Is(token.Return):
+			block = append(block, ast.LastStatement{
+				ExpList: p.explist(),
+			})
+		case next.Is(token.Break):
+			block = append(block, ast.LastStatement{
+				Break: true,
+			})
+		default:
+			p.stash(next)
+		}
+	}
 	return block
 }
 
@@ -203,15 +218,8 @@ func (p *parser) stmt() ast.Statement {
 			return nil
 		}
 		return doBlock
-	case tk.Is(token.End):
-		// This is kind of a workaround.
-		// If we try to parse ay kind of block, it consists
-		// of statements followed by 'end'. 'end' should not give
-		// a statement, so stash it and return nil.
-		p.stash(tk)
-		return nil
 	}
-	p.collectError(fmt.Errorf("unexpected token %s", tk))
+	p.stash(tk)
 	return nil
 }
 

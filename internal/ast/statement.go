@@ -106,6 +106,7 @@ type (
 	// LastStatement is a Lua last statement in a Block.
 	LastStatement struct {
 		ExpList []Exp
+		Break   bool
 	}
 )
 

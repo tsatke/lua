@@ -67,8 +67,22 @@ func (e *Engine) evaluateStatement(stmt ast.Statement) ([]value.Value, error) {
 		return e.evaluateIfBlock(s)
 	case ast.DoBlock:
 		return e.evaluateDoBlock(s)
+	case ast.LastStatement:
+		return e.evaluateLastStatement(s)
 	}
 	return nil, fmt.Errorf("%T unsupported", stmt)
+}
+
+func (e *Engine) evaluateLastStatement(stmt ast.LastStatement) ([]value.Value, error) {
+	if stmt.Break {
+		return nil, fmt.Errorf("break not supported yet")
+	}
+
+	results, err := e.evaluateExpList(stmt.ExpList)
+	if err != nil {
+		return nil, fmt.Errorf("explist: %w", err)
+	}
+	return results, nil
 }
 
 func (e *Engine) evaluateIfBlock(block ast.IfBlock) ([]value.Value, error) {

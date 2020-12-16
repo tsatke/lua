@@ -1,6 +1,10 @@
 package engine
 
-import "github.com/tsatke/lua/internal/engine/value"
+import (
+	"bytes"
+	"fmt"
+	"github.com/tsatke/lua/internal/engine/value"
+)
 
 type Error struct {
 	e       Engine
@@ -18,4 +22,13 @@ func (e Error) Error() string {
 		panic(err)
 	}
 	return string(res[0].(value.String))
+}
+
+func (e Error) String() string {
+	var buf bytes.Buffer
+	buf.WriteString(e.Error())
+	for i, frame := range e.Stack {
+		buf.WriteString(fmt.Sprintf("\n\t%d %s", i, frame.String()))
+	}
+	return buf.String()
 }
