@@ -474,7 +474,11 @@ func (s *inMemoryScanner) quotedString() (token.Token, bool) {
 
 	content := s.candidate()
 	content = content[1 : len(content)-1]
-	return token.New(content, s.tkpos(), token.String), true
+	unescapedContent, err := unescape(content)
+	if err != nil {
+		return s.error(err), false
+	}
+	return token.New(unescapedContent, s.tkpos(), token.String), true
 }
 
 func (s *inMemoryScanner) multilineString() (token.Token, bool) {

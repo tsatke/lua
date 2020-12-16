@@ -151,4 +151,9 @@ c
 		[]token.Token{
 			token.New("whatever", token.Position{1, 1, 0}, token.String),
 		})
+
+	suite.assertTokensString(`"a\tb"`,
+		[]token.Token{
+			token.New("a\tb", token.Position{1, 1, 0}, token.String),
+		})
 }
