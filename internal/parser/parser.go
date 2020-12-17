@@ -266,21 +266,35 @@ func (p *parser) if_() (ast.IfBlock, bool) {
 
 	next, ok := p.next()
 	if !ok {
-		p.collectError(fmt.Errorf("expected %s, %s or %s, but got %v", token.Elseif, token.Else, token.End, next))
+		p.collectError(ErrUnexpectedEof("elseif, else or end"))
 		return ast.IfBlock{}, false
 	}
-	if next.Is(token.Elseif) || next.Is(token.Else) {
-		p.collectError(fmt.Errorf("elseif and else is not supported yet"))
+	if next.Is(token.Elseif) {
+		p.collectError(fmt.Errorf("elseif is not supported yet"))
+		return ast.IfBlock{}, false
+	}
+
+	var elseBlock ast.Block
+	if next.Is(token.Else) {
+		elseBlock = p.block()
+	} else {
+		p.stash(next)
+	}
+
+	next, ok = p.next()
+	if !ok {
+		p.collectError(ErrUnexpectedEof("end"))
 		return ast.IfBlock{}, false
 	}
 	if !next.Is(token.End) {
-		p.collectError(ErrUnexpectedThing(token.End, next))
+		p.collectError(ErrUnexpectedThing("end", next))
 		return ast.IfBlock{}, false
 	}
 
 	return ast.IfBlock{
 		If:   exp,
 		Then: block,
+		Else: elseBlock,
 	}, true
 }
 
@@ -319,8 +333,8 @@ func (p *parser) function() (ast.Function, bool) {
 		return ast.Function{}, false
 	}
 	var name *ast.FuncName
+	p.stash(next)
 	if next.Is(token.Name) {
-		p.stash(next)
 		fname, ok := p.funcname()
 		if !ok {
 			p.collectError(ErrUnexpectedEof("name"))
@@ -661,9 +675,21 @@ func (p *parser) exp() (exp ast.Exp) {
 			return nil
 		}
 		exp = prefixexp
+	case next.Is(token.Function):
+		p.stash(next)
+		fn, ok := p.function()
+		if !ok {
+			p.collectError(ErrExpectedSomething("function"))
+			return nil
+		}
+		if fn.FuncName != nil {
+			p.collectError(fmt.Errorf("function cannot have a name if it's an expression"))
+			return nil
+		}
+		exp = fn
 	}
 	if exp == nil {
-		p.collectError(fmt.Errorf("function, prefixexp and tableconstructor are not supported yet (%s)", next))
+		p.collectError(fmt.Errorf("tableconstructors are not supported yet (%s)", next))
 		return
 	}
 

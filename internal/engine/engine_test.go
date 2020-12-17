@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"github.com/spf13/afero"
 	"github.com/tsatke/lua/internal/engine/value"
-	"io/ioutil"
 	"path/filepath"
 	"strings"
 	"time"
@@ -81,10 +80,14 @@ func (suite *EngineSuite) TestLuaSuite() {
 	basePath := "suite"
 	mainFile := "main.lua"
 
+	stdin := new(bytes.Buffer)
+	stdout := new(bytes.Buffer)
+	stderr := new(bytes.Buffer)
+
 	engine := New(
-		WithStdin(new(bytes.Buffer)),
-		WithStdout(ioutil.Discard),
-		WithStderr(ioutil.Discard),
+		WithStdin(stdin),
+		WithStdout(stdout),
+		WithStderr(stderr),
 		WithClock(mockClock{}),
 		WithFs(afero.NewBasePathFs(suite.testdata, basePath)),
 	)
@@ -102,4 +105,7 @@ func (suite *EngineSuite) TestLuaSuite() {
 		}
 		suite.Fail("lua tests failed")
 	}
+
+	suite.T().Logf("stdout (%d bytes):\n%s", len(stdout.Bytes()), stdout.String())
+	suite.T().Logf("stderr (%d bytes):\n%s", len(stderr.Bytes()), stderr.String())
 }

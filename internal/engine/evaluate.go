@@ -130,20 +130,29 @@ func (e *Engine) evaluateDoBlock(block ast.DoBlock) ([]value.Value, error) {
 }
 
 func (e *Engine) evaluateFunction(decl ast.Function) ([]value.Value, error) {
-	if decl.FuncName.Name2 != nil {
-		return nil, fmt.Errorf("function with ':' not supported")
-	}
-	if len(decl.FuncName.Name1) != 1 {
-		return nil, fmt.Errorf("only plain functions supported")
-	}
+	fnName := "<anonymous>"
+	isAnonymous := decl.FuncName == nil
+	if !isAnonymous {
+		if decl.FuncName.Name2 != nil {
+			return nil, fmt.Errorf("function with ':' not supported")
+		}
+		if len(decl.FuncName.Name1) != 1 {
+			return nil, fmt.Errorf("only plain functions supported")
+		}
 
-	fnName := decl.FuncName.Name1[0].Value()
+		fnName = decl.FuncName.Name1[0].Value()
+	}
 
 	luaFn, err := e.createCallable(decl.FuncBody.ParList, decl.FuncBody.Block)
 	if err != nil {
 		return nil, fmt.Errorf("create callable: %w", err)
 	}
-	e.assign(e._G, fnName, value.NewFunction(fnName, luaFn)) // change the function Name when we support more than just one Name fragment
+
+	functionValue := value.NewFunction(fnName, luaFn)
+	if isAnonymous {
+		return values(functionValue), nil
+	}
+	e.assign(e._G, fnName, functionValue) // change the function Name when we support more than just one Name fragment
 	return nil, nil
 }
 
@@ -283,6 +292,8 @@ func (e *Engine) evaluateComplexExpression(exp ast.ComplexExp) ([]value.Value, e
 		return e.evaluateUnopExpression(ex)
 	case ast.BinopExp:
 		return e.evaluateBinopExpression(ex)
+	case ast.Function:
+		return e.evaluateFunction(ex)
 	default:
 		return nil, fmt.Errorf("%T unsupported", exp)
 	}
@@ -303,6 +314,13 @@ func (e *Engine) evaluateUnopExpression(exp ast.UnopExp) ([]value.Value, error) 
 				return nil, fmt.Errorf("arithmetic unary negation: %w", err)
 			}
 			return results, nil
+		}
+	case "not":
+		if boolVal, ok := operand.(value.Boolean); ok {
+			if boolVal {
+				return values(value.False), nil
+			}
+			return values(value.True), nil
 		}
 	}
 	return nil, fmt.Errorf("unsupported unary operator '%s' on %s", exp.Unop.Value(), operand.Type())
@@ -350,6 +368,21 @@ func (e *Engine) evaluateBinopExpression(exp ast.BinopExp) ([]value.Value, error
 			return nil, fmt.Errorf("floor divide: %w", err)
 		}
 		return results, nil
+	case "==":
+		results, err := e.cmpEqual(left, right)
+		if err != nil {
+			return nil, fmt.Errorf("equals: %w", err)
+		}
+		return results, nil
+	case "~=":
+		results, err := e.cmpEqual(left, right)
+		if err != nil {
+			return nil, fmt.Errorf("not equals: %w", err)
+		}
+		if results[0] == value.False {
+			return values(value.True), nil
+		}
+		return values(value.False), nil
 	}
 	return nil, fmt.Errorf("unsupported binary operator %s", exp.Binop.Value())
 }
@@ -450,6 +483,12 @@ func (e *Engine) evaluateSimpleExpression(exp ast.SimpleExp) (value.Value, error
 			return nil, fmt.Errorf("cannot parse value '%s' as number", exp.Number.Value())
 		}
 		return value.NewNumber(val), nil
+	case exp.True != nil:
+		return value.True, nil
+	case exp.False != nil:
+		return value.False, nil
+	case exp.Nil != nil:
+		return value.Nil, nil
 	}
-	return nil, fmt.Errorf("%T unsupported", exp)
+	return nil, fmt.Errorf("%T not supported as simple exp", exp)
 }
