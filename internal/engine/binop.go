@@ -8,68 +8,33 @@ import (
 )
 
 func (e *Engine) add(left, right Value) ([]Value, error) {
-	if left.Type() != TypeNumber {
-		return nil, fmt.Errorf("left is not a number")
-	}
-	if right.Type() != TypeNumber {
-		return nil, fmt.Errorf("right is not a number")
-	}
-
-	leftNum := left.(Number).Value()
-	rightNum := right.(Number).Value()
-	return values(NewNumber(leftNum + rightNum)), nil
+	return binaryFloatingPointOperation(left, right, func(left, right float64) float64 {
+		return left + right
+	})
 }
 
 func (e *Engine) subtract(left, right Value) ([]Value, error) {
-	if left.Type() != TypeNumber {
-		return nil, fmt.Errorf("left is not a number")
-	}
-	if right.Type() != TypeNumber {
-		return nil, fmt.Errorf("right is not a number")
-	}
-
-	leftNum := left.(Number).Value()
-	rightNum := right.(Number).Value()
-	return values(NewNumber(leftNum - rightNum)), nil
+	return binaryFloatingPointOperation(left, right, func(left, right float64) float64 {
+		return left - right
+	})
 }
 
 func (e *Engine) multiply(left, right Value) ([]Value, error) {
-	if left.Type() != TypeNumber {
-		return nil, fmt.Errorf("left is not a number")
-	}
-	if right.Type() != TypeNumber {
-		return nil, fmt.Errorf("right is not a number")
-	}
-
-	leftNum := left.(Number).Value()
-	rightNum := right.(Number).Value()
-	return values(NewNumber(leftNum * rightNum)), nil
+	return binaryFloatingPointOperation(left, right, func(left, right float64) float64 {
+		return left * right
+	})
 }
 
 func (e *Engine) divide(left, right Value) ([]Value, error) {
-	if left.Type() != TypeNumber {
-		return nil, fmt.Errorf("left is not a number")
-	}
-	if right.Type() != TypeNumber {
-		return nil, fmt.Errorf("right is not a number")
-	}
-
-	leftNum := left.(Number).Value()
-	rightNum := right.(Number).Value()
-	return values(NewNumber(leftNum / rightNum)), nil
+	return binaryFloatingPointOperation(left, right, func(left, right float64) float64 {
+		return left / right
+	})
 }
 
 func (e *Engine) floorDivide(left, right Value) ([]Value, error) {
-	if left.Type() != TypeNumber {
-		return nil, fmt.Errorf("left is not a number")
-	}
-	if right.Type() != TypeNumber {
-		return nil, fmt.Errorf("right is not a number")
-	}
-
-	leftNum := left.(Number).Value()
-	rightNum := right.(Number).Value()
-	return values(NewNumber(math.Floor(leftNum / rightNum))), nil
+	return binaryFloatingPointOperation(left, right, func(left, right float64) float64 {
+		return math.Floor(left / right)
+	})
 }
 
 func (e *Engine) cmpEqual(left, right Value) ([]Value, error) {
@@ -158,25 +123,15 @@ func (e *Engine) concatenation(left, right Value) ([]Value, error) {
 }
 
 func (e *Engine) modulo(left, right Value) ([]Value, error) {
-	if left.Type() != TypeNumber {
-		return nil, fmt.Errorf("left is not a number")
-	}
-	if right.Type() != TypeNumber {
-		return nil, fmt.Errorf("right is not a number")
-	}
-
-	leftNum := left.(Number).Value()
-	rightNum := right.(Number).Value()
-
-	return values(NewNumber(math.Mod(leftNum, rightNum))), nil
+	return binaryFloatingPointOperation(left, right, math.Mod)
 }
 
-func binaryIntegralOperation(left, right Value, operator func(left, right int64) int64) ([]Value, error) {
+func attemptConversionToNumber(left, right Value) (float64, float64, error) {
 	if left.Type() != TypeNumber && left.Type() != TypeString {
-		return nil, fmt.Errorf("left is not a number")
+		return 0, 0, fmt.Errorf("left is not a number")
 	}
 	if right.Type() != TypeNumber && right.Type() != TypeString {
-		return nil, fmt.Errorf("right is not a number")
+		return 0, 0, fmt.Errorf("right is not a number")
 	}
 
 	var leftVal float64
@@ -185,7 +140,7 @@ func binaryIntegralOperation(left, right Value, operator func(left, right int64)
 	} else {
 		res, err := strconv.ParseFloat(left.(String).String(), 64)
 		if err != nil {
-			return nil, fmt.Errorf("cannot convert '%s' to a number", left.(String).String())
+			return 0, 0, fmt.Errorf("cannot convert '%s' to a number", left.(String).String())
 		}
 		leftVal = res
 	}
@@ -195,9 +150,28 @@ func binaryIntegralOperation(left, right Value, operator func(left, right int64)
 	} else {
 		res, err := strconv.ParseFloat(right.(String).String(), 64)
 		if err != nil {
-			return nil, fmt.Errorf("cannot convert '%s' to a number", right.(String).String())
+			return 0, 0, fmt.Errorf("cannot convert '%s' to a number", right.(String).String())
 		}
 		rightVal = res
+	}
+	return leftVal, rightVal, nil
+}
+
+func binaryFloatingPointOperation(left, right Value, operator func(left, right float64) float64) ([]Value, error) {
+	leftVal, rightVal, err := attemptConversionToNumber(left, right)
+	if err != nil {
+		return nil, err
+	}
+
+	computationResult := operator(leftVal, rightVal)
+	resultValue := NewNumber(computationResult)
+	return values(resultValue), nil
+}
+
+func binaryIntegralOperation(left, right Value, operator func(left, right int64) int64) ([]Value, error) {
+	leftVal, rightVal, err := attemptConversionToNumber(left, right)
+	if err != nil {
+		return nil, err
 	}
 
 	computationResult := operator(int64(leftVal), int64(rightVal))
