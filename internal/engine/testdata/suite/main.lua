@@ -40,9 +40,13 @@ do
     end
 end
 
+_RC = 0
+
 print("loading utilities")
 dofile("utility.lua")
 
 print("starting suite")
 
 dofile("operators.lua")
+
+return _RC

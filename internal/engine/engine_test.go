@@ -96,7 +96,7 @@ func (suite *EngineSuite) TestLuaSuite() {
 	suite.Require().NoError(err)
 	defer func() { _ = file.Close() }()
 
-	_, err = engine.Eval(file)
+	results, err := engine.Eval(file)
 	if err != nil {
 		if luaErr, ok := err.(Error); ok {
 			suite.T().Logf("lua suite called error():\n%s", luaErr.String())
@@ -105,6 +105,9 @@ func (suite *EngineSuite) TestLuaSuite() {
 		}
 		suite.Fail("lua tests failed")
 	}
+	suite.Len(results, 1)
+	rc := results[0]
+	suite.EqualValues(rc.(value.Number).Value(), 0, "RC != 0")
 
 	suite.T().Logf("stdout (%d bytes):\n%s", len(stdout.Bytes()), stdout.String())
 	suite.T().Logf("stderr (%d bytes):\n%s", len(stderr.Bytes()), stderr.String())

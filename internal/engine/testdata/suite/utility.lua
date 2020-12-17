@@ -45,6 +45,7 @@ function runTest(name, testFn)
     ok, msg = pcall(testFn)
     if not ok then
         print("❌ FAIL (message: " .. msg .. ")")
+        _RC = 1
     else
         print("✅ OK")
     end
