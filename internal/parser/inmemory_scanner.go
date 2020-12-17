@@ -391,13 +391,17 @@ start:
 			return s.token(token.BinaryOperator), true
 		}
 	case '<':
-		if s.check("<=") {
+		if s.check("<<") {
+			return s.token(token.BinaryOperator), true
+		} else if s.check("<=") {
 			return s.token(token.BinaryOperator), true
 		} else if s.check("<") {
 			return s.token(token.BinaryOperator), true
 		}
 	case '>':
-		if s.check(">=") {
+		if s.check(">>") {
+			return s.token(token.BinaryOperator), true
+		} else if s.check(">=") {
 			return s.token(token.BinaryOperator), true
 		} else if s.check(">") {
 			return s.token(token.BinaryOperator), true
@@ -411,6 +415,8 @@ start:
 	case '~':
 		if s.check("~=") {
 			return s.token(token.BinaryOperator), true
+		} else if s.check("~") {
+			return s.token(token.UnaryOperator), true
 		}
 	case '#':
 		if s.check("#") {
@@ -429,6 +435,14 @@ start:
 	case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 		if s.checkNumber() {
 			return s.token(token.Number), true
+		}
+	case '|':
+		if s.check("|") {
+			return s.token(token.BinaryOperator), true
+		}
+	case '&':
+		if s.check("&") {
+			return s.token(token.BinaryOperator), true
 		}
 	case ';':
 		if s.check(";") {

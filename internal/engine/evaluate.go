@@ -96,7 +96,7 @@ func (e *Engine) evaluateIfBlock(block ast.IfBlock) ([]value.Value, error) {
 	if len(ifConds) > 0 {
 		ifCond = ifConds[0]
 	}
-	if !(ifCond == nil || ifCond == value.False || ifCond == value.Nil) {
+	if e.valueIsLogicallyTrue(ifCond) {
 		return e.evaluateBlock(block.Then)
 	}
 
@@ -123,6 +123,10 @@ func (e *Engine) evaluateIfBlock(block ast.IfBlock) ([]value.Value, error) {
 		return e.evaluateBlock(block.Else)
 	}
 	return nil, nil
+}
+
+func (e *Engine) valueIsLogicallyTrue(val value.Value) bool {
+	return !(val == nil || val == value.False || val == value.Nil)
 }
 
 func (e *Engine) evaluateDoBlock(block ast.DoBlock) ([]value.Value, error) {
@@ -216,6 +220,19 @@ func (e *Engine) evaluateExpList(explist []ast.Exp) ([]value.Value, error) {
 }
 
 func (e *Engine) evaluateAssignment(assignment ast.Assignment) error {
+	if len(assignment.ExpList) == 1 {
+		values, err := e.evaluateExpression(assignment.ExpList[0])
+		if err != nil {
+			return fmt.Errorf("explist: %w", err)
+		}
+
+		for i := 0; i < len(values); i++ {
+			if err := e.evaluateAssign(assignment.VarList[i], values[i]); err != nil {
+				return fmt.Errorf("assign: %w", err)
+			}
+		}
+	}
+
 	varAmount, expAmount := len(assignment.VarList), len(assignment.ExpList)
 	amount := varAmount
 	if expAmount < varAmount {
@@ -322,11 +339,41 @@ func (e *Engine) evaluateUnopExpression(exp ast.UnopExp) ([]value.Value, error) 
 			}
 			return values(value.True), nil
 		}
+	case "~":
+		return e.evaluateBitwiseNot(operand)
 	}
 	return nil, fmt.Errorf("unsupported unary operator '%s' on %s", exp.Unop.Value(), operand.Type())
 }
 
 func (e *Engine) evaluateBinopExpression(exp ast.BinopExp) ([]value.Value, error) {
+	switch exp.Binop.Value() {
+	case "or":
+		return e.evaluateBinopLazy(exp)
+	}
+	return e.evaluateBinopEager(exp)
+}
+
+func (e *Engine) evaluateBinopLazy(exp ast.BinopExp) ([]value.Value, error) {
+	switch exp.Binop.Value() {
+	case "or":
+		lefts, err := e.evaluateExpression(exp.Left)
+		if err != nil {
+			return nil, fmt.Errorf("left exp: %w", err)
+		}
+		if e.valueIsLogicallyTrue(lefts[0]) {
+			return values(lefts[0]), nil
+		}
+
+		rights, err := e.evaluateExpression(exp.Right)
+		if err != nil {
+			return nil, fmt.Errorf("right exp: %w", err)
+		}
+		return values(rights[0]), nil
+	}
+	return nil, fmt.Errorf("unsupported binary operator %s", exp.Binop.Value())
+}
+
+func (e *Engine) evaluateBinopEager(exp ast.BinopExp) ([]value.Value, error) {
 	lefts, err := e.evaluateExpression(exp.Left)
 	if err != nil {
 		return nil, fmt.Errorf("left exp: %w", err)
@@ -337,54 +384,220 @@ func (e *Engine) evaluateBinopExpression(exp ast.BinopExp) ([]value.Value, error
 	}
 	left, right := lefts[0], rights[0]
 
+	var operator func(left, right value.Value) ([]value.Value, error)
+
 	switch exp.Binop.Value() {
 	case "+":
-		results, err := e.add(left, right)
-		if err != nil {
-			return nil, fmt.Errorf("add: %w", err)
-		}
-		return results, nil
+		operator = e.evaluateAddition
 	case "-":
-		results, err := e.subtract(left, right)
-		if err != nil {
-			return nil, fmt.Errorf("subtract: %w", err)
-		}
-		return results, nil
+		operator = e.evaluateSubtraction
 	case "*":
-		results, err := e.multiply(left, right)
-		if err != nil {
-			return nil, fmt.Errorf("multiply: %w", err)
-		}
-		return results, nil
+		operator = e.evaluateMultiplication
 	case "/":
-		results, err := e.divide(left, right)
-		if err != nil {
-			return nil, fmt.Errorf("divide: %w", err)
-		}
-		return results, nil
+		operator = e.evaluateDivision
 	case "//":
-		results, err := e.floorDivide(left, right)
-		if err != nil {
-			return nil, fmt.Errorf("floor divide: %w", err)
-		}
-		return results, nil
+		operator = e.evaluateFloorDivision
 	case "==":
-		results, err := e.cmpEqual(left, right)
-		if err != nil {
-			return nil, fmt.Errorf("equals: %w", err)
-		}
-		return results, nil
+		operator = e.evaluateEqual
 	case "~=":
-		results, err := e.cmpEqual(left, right)
-		if err != nil {
-			return nil, fmt.Errorf("not equals: %w", err)
-		}
-		if results[0] == value.False {
-			return values(value.True), nil
-		}
-		return values(value.False), nil
+		operator = e.evaluateUnequal
+	case "<":
+		operator = e.evaluateLess
+	case "<=":
+		operator = e.evaluateLessOrEqual
+	case ">":
+		operator = e.evaluateGreater
+	case ">=":
+		operator = e.evaluateGreaterOrEqual
+	case "and":
+		operator = e.evaluateAnd
+	case "|":
+		operator = e.evaluateBitwiseOr
+	case "&":
+		operator = e.evaluateBitwiseAnd
+	case "<<":
+		operator = e.evaluateBitwiseLeftShift
+	case ">>":
+		operator = e.evaluateBitwiseRightShift
+	case "..":
+		operator = e.evaluateConcatenation
+	case "%":
+		operator = e.evaluateModulo
 	}
-	return nil, fmt.Errorf("unsupported binary operator %s", exp.Binop.Value())
+	if operator == nil {
+		return nil, fmt.Errorf("unsupported binary operator %s", exp.Binop.Value())
+	}
+	return operator(left, right)
+}
+
+func (e *Engine) evaluateBitwiseNot(val value.Value) ([]value.Value, error) {
+	results, err := e.bitwiseNot(val)
+	if err != nil {
+		return nil, fmt.Errorf("bitwise not: %w", err)
+	}
+	return results, nil
+}
+
+func (e *Engine) evaluateConcatenation(left, right value.Value) ([]value.Value, error) {
+	results, err := e.concatenation(left, right)
+	if err != nil {
+		return nil, fmt.Errorf("concat: %w", err)
+	}
+	return results, nil
+}
+
+func (e *Engine) evaluateModulo(left, right value.Value) ([]value.Value, error) {
+	results, err := e.modulo(left, right)
+	if err != nil {
+		return nil, fmt.Errorf("modulo: %w", err)
+	}
+	return results, nil
+}
+
+func (e *Engine) evaluateBitwiseOr(left, right value.Value) ([]value.Value, error) {
+	results, err := e.bitwiseOr(left, right)
+	if err != nil {
+		return nil, fmt.Errorf("bitwise or: %w", err)
+	}
+	return results, nil
+}
+
+func (e *Engine) evaluateBitwiseAnd(left, right value.Value) ([]value.Value, error) {
+	results, err := e.bitwiseAnd(left, right)
+	if err != nil {
+		return nil, fmt.Errorf("bitwise and: %w", err)
+	}
+	return results, nil
+}
+
+func (e *Engine) evaluateBitwiseLeftShift(left, right value.Value) ([]value.Value, error) {
+	results, err := e.bitwiseLeftShift(left, right)
+	if err != nil {
+		return nil, fmt.Errorf("left shift: %w", err)
+	}
+	return results, nil
+}
+
+func (e *Engine) evaluateBitwiseRightShift(left, right value.Value) ([]value.Value, error) {
+	results, err := e.bitwiseRightShift(left, right)
+	if err != nil {
+		return nil, fmt.Errorf("right shift: %w", err)
+	}
+	return results, nil
+}
+
+func (e *Engine) evaluateAnd(left, right value.Value) ([]value.Value, error) {
+	results, err := e.and(left, right)
+	if err != nil {
+		return nil, fmt.Errorf("and: %w", err)
+	}
+	return results, nil
+}
+
+func (e *Engine) evaluateAddition(left, right value.Value) ([]value.Value, error) {
+	results, err := e.add(left, right)
+	if err != nil {
+		return nil, fmt.Errorf("add: %w", err)
+	}
+	return results, nil
+}
+
+func (e *Engine) evaluateSubtraction(left, right value.Value) ([]value.Value, error) {
+	results, err := e.subtract(left, right)
+	if err != nil {
+		return nil, fmt.Errorf("subtract: %w", err)
+	}
+	return results, nil
+}
+
+func (e *Engine) evaluateMultiplication(left, right value.Value) ([]value.Value, error) {
+	results, err := e.multiply(left, right)
+	if err != nil {
+		return nil, fmt.Errorf("multiply: %w", err)
+	}
+	return results, nil
+}
+
+func (e *Engine) evaluateDivision(left, right value.Value) ([]value.Value, error) {
+	results, err := e.divide(left, right)
+	if err != nil {
+		return nil, fmt.Errorf("divide: %w", err)
+	}
+	return results, nil
+}
+
+func (e *Engine) evaluateFloorDivision(left, right value.Value) ([]value.Value, error) {
+	results, err := e.floorDivide(left, right)
+	if err != nil {
+		return nil, fmt.Errorf("floor divide: %w", err)
+	}
+	return results, nil
+}
+
+func (e *Engine) evaluateEqual(left, right value.Value) ([]value.Value, error) {
+	eq, err := e.equal(left, right)
+	if err != nil {
+		return nil, fmt.Errorf("compare: %w", err)
+	}
+	if eq {
+		return values(value.True), nil
+	}
+	return values(value.False), nil
+}
+
+func (e *Engine) evaluateUnequal(left, right value.Value) ([]value.Value, error) {
+	eq, err := e.equal(left, right)
+	if err != nil {
+		return nil, fmt.Errorf("compare: %w", err)
+	}
+	if !eq {
+		return values(value.True), nil
+	}
+	return values(value.False), nil
+}
+
+func (e *Engine) evaluateLess(left, right value.Value) ([]value.Value, error) {
+	less, err := e.less(left, right)
+	if err != nil {
+		return nil, fmt.Errorf("compare: %w", err)
+	}
+	if less {
+		return values(value.True), nil
+	}
+	return values(value.False), nil
+}
+
+func (e *Engine) evaluateLessOrEqual(left, right value.Value) ([]value.Value, error) {
+	lessEq, err := e.lessEqual(left, right)
+	if err != nil {
+		return nil, fmt.Errorf("compare: %w", err)
+	}
+	if lessEq {
+		return values(value.True), nil
+	}
+	return values(value.False), nil
+}
+
+func (e *Engine) evaluateGreater(left, right value.Value) ([]value.Value, error) {
+	greater, err := e.less(right, left)
+	if err != nil {
+		return nil, fmt.Errorf("compare: %w", err)
+	}
+	if greater {
+		return values(value.True), nil
+	}
+	return values(value.False), nil
+}
+
+func (e *Engine) evaluateGreaterOrEqual(left, right value.Value) ([]value.Value, error) {
+	greaterEq, err := e.lessEqual(right, left)
+	if err != nil {
+		return nil, fmt.Errorf("compare: %w", err)
+	}
+	if greaterEq {
+		return values(value.True), nil
+	}
+	return values(value.False), nil
 }
 
 func (e *Engine) evaluatePrefixExpression(exp ast.PrefixExp) ([]value.Value, error) {

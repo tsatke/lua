@@ -44,4 +44,5 @@ print("loading utilities")
 dofile("utility.lua")
 
 print("starting suite")
-EQ(1, 1)
+
+dofile("operators.lua")

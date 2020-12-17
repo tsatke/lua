@@ -9,7 +9,7 @@ import (
 type Error struct {
 	e       Engine
 	Message value.Value
-	level   value.Value
+	Level   value.Value
 	Stack   []StackFrame
 }
 
@@ -26,6 +26,11 @@ func (e Error) Error() string {
 
 func (e Error) String() string {
 	var buf bytes.Buffer
+	level := int(e.Level.(value.Number))
+	if len(e.Stack) > level {
+		buf.WriteString(e.Stack[level].Name)
+		buf.WriteString(": ")
+	}
 	buf.WriteString(e.Error())
 	for i, frame := range e.Stack {
 		buf.WriteString(fmt.Sprintf("\n\t%d %s", i, frame.String()))

@@ -85,6 +85,9 @@ func (e *Engine) dofile(args ...Value) ([]Value, error) {
 		// evaluate stdin if no args are given
 		results, err := e.Eval(e.stdin)
 		if err != nil {
+			if luaErr, ok := err.(Error); ok {
+				return nil, luaErr
+			}
 			return nil, fmt.Errorf("eval stdin: %w", err)
 		}
 		return results, nil
@@ -111,6 +114,9 @@ func (e *Engine) dofile(args ...Value) ([]Value, error) {
 
 	results, err := e.Eval(file)
 	if err != nil {
+		if luaErr, ok := err.(Error); ok {
+			panic(luaErr) // if the chunk in the file errored, the error has to be propagated
+		}
 		return nil, fmt.Errorf("eval: %w", err)
 	}
 	return results, nil
@@ -118,13 +124,18 @@ func (e *Engine) dofile(args ...Value) ([]Value, error) {
 
 func (e *Engine) error(args ...Value) ([]Value, error) {
 	var message Value
+	var level Value
 	var stack []StackFrame
 	if len(args) > 0 {
 		message = args[0]
-		stack = e.stack.Slice()
 	}
+	if len(args) > 1 {
+		level = args[1]
+	}
+	stack = e.stack.Slice()
 	panic(Error{
 		Message: message,
+		Level:   level,
 		Stack:   stack,
 	})
 }

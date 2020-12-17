@@ -116,7 +116,7 @@ func (p *parser) block() ast.Block {
 	return block
 }
 
-func (p *parser) stmt() ast.Statement {
+func (p *parser) stmt() (stmt ast.Statement) {
 	defer func() {
 		// optional semicolon after a statement
 		next, ok := p.next()
