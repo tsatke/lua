@@ -2,6 +2,7 @@ package engine
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/tsatke/lua/internal/ast"
 	"github.com/tsatke/lua/internal/engine/value"
@@ -198,7 +199,7 @@ func (e *Engine) evaluateExpList(explist []ast.Exp) ([]value.Value, error) {
 	for _, exp := range explist {
 		results, err := e.evaluateExpression(exp)
 		if err != nil {
-			return nil, fmt.Errorf("evaluateChunk expression: %w", err)
+			return nil, fmt.Errorf("expression: %w", err)
 		}
 		vals = append(vals, results...)
 	}
@@ -278,9 +279,79 @@ func (e *Engine) evaluateComplexExpression(exp ast.ComplexExp) ([]value.Value, e
 	switch ex := exp.(type) {
 	case ast.PrefixExp:
 		return e.evaluatePrefixExpression(ex)
+	case ast.UnopExp:
+		return e.evaluateUnopExpression(ex)
+	case ast.BinopExp:
+		return e.evaluateBinopExpression(ex)
 	default:
 		return nil, fmt.Errorf("%T unsupported", exp)
 	}
+}
+
+func (e *Engine) evaluateUnopExpression(exp ast.UnopExp) ([]value.Value, error) {
+	operands, err := e.evaluateExpression(exp.Exp)
+	if err != nil {
+		return nil, fmt.Errorf("operand: %w", err)
+	}
+	operand := operands[0]
+
+	switch exp.Unop.Value() {
+	case "-":
+		if num, ok := operand.(value.Number); ok {
+			results, err := e.multiply(value.NewNumber(-1), num)
+			if err != nil {
+				return nil, fmt.Errorf("arithmetic unary negation: %w", err)
+			}
+			return results, nil
+		}
+	}
+	return nil, fmt.Errorf("unsupported unary operator '%s' on %s", exp.Unop.Value(), operand.Type())
+}
+
+func (e *Engine) evaluateBinopExpression(exp ast.BinopExp) ([]value.Value, error) {
+	lefts, err := e.evaluateExpression(exp.Left)
+	if err != nil {
+		return nil, fmt.Errorf("left exp: %w", err)
+	}
+	rights, err := e.evaluateExpression(exp.Right)
+	if err != nil {
+		return nil, fmt.Errorf("right exp: %w", err)
+	}
+	left, right := lefts[0], rights[0]
+
+	switch exp.Binop.Value() {
+	case "+":
+		results, err := e.add(left, right)
+		if err != nil {
+			return nil, fmt.Errorf("add: %w", err)
+		}
+		return results, nil
+	case "-":
+		results, err := e.subtract(left, right)
+		if err != nil {
+			return nil, fmt.Errorf("subtract: %w", err)
+		}
+		return results, nil
+	case "*":
+		results, err := e.multiply(left, right)
+		if err != nil {
+			return nil, fmt.Errorf("multiply: %w", err)
+		}
+		return results, nil
+	case "/":
+		results, err := e.divide(left, right)
+		if err != nil {
+			return nil, fmt.Errorf("divide: %w", err)
+		}
+		return results, nil
+	case "//":
+		results, err := e.floorDivide(left, right)
+		if err != nil {
+			return nil, fmt.Errorf("floor divide: %w", err)
+		}
+		return results, nil
+	}
+	return nil, fmt.Errorf("unsupported binary operator %s", exp.Binop.Value())
 }
 
 func (e *Engine) evaluatePrefixExpression(exp ast.PrefixExp) ([]value.Value, error) {
@@ -369,22 +440,16 @@ func (e *Engine) evaluatePrefixExpression(exp ast.PrefixExp) ([]value.Value, err
 	return results, nil
 }
 
-func (e *Engine) evaluateVar(v ast.Var) ([]value.Value, error) {
-	if v.Name == nil {
-		return nil, fmt.Errorf("only names are supported as variables")
-	}
-
-	value, ok := e.variable(v.Name.Value())
-	if !ok {
-		return nil, nil
-	}
-	return values(value), nil
-}
-
 func (e *Engine) evaluateSimpleExpression(exp ast.SimpleExp) (value.Value, error) {
 	switch {
 	case exp.String != nil:
 		return value.NewString(exp.String.Value()), nil
+	case exp.Number != nil:
+		val, err := strconv.ParseFloat(exp.Number.Value(), 64)
+		if err != nil {
+			return nil, fmt.Errorf("cannot parse value '%s' as number", exp.Number.Value())
+		}
+		return value.NewNumber(val), nil
 	}
 	return nil, fmt.Errorf("%T unsupported", exp)
 }

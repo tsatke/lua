@@ -161,12 +161,7 @@ func (s *inMemoryScanner) checkNumber() bool {
 		i++
 	}
 
-	var signed bool
-	// optional sign
-	if hasMore() && get() == '-' {
-		signed = true
-		consume() // consume the sign
-	}
+	// a number token does not contain a sign
 
 	// optional integral digits
 	for hasMore() && unicode.IsDigit(rune(get())) {
@@ -202,7 +197,7 @@ func (s *inMemoryScanner) checkNumber() bool {
 			consume()
 		}
 	}
-	if i == 0 || (i == 1 && signed) {
+	if i == 0 {
 		// if we didn't consume any runes or just one rune, but it was the sign,
 		// then this is not a number
 		return false
@@ -373,8 +368,6 @@ start:
 		if s.check("--") { // EOL-comment
 			s.skipRemainingLine() // ignore everything until line-end
 			goto start
-		} else if s.checkNumber() {
-			return s.token(token.Number), true
 		} else if s.check("-") {
 			return s.token(token.UnaryOperator, token.BinaryOperator), true
 		}

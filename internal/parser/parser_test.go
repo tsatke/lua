@@ -218,3 +218,26 @@ return 5
 		},
 	})
 }
+
+func (suite *ParserSuite) TestBinaryExpression() {
+	suite.assertChunkString(`
+return x * 5
+`, ast.Chunk{
+		Name: "<unknown input>",
+		Block: ast.Block{
+			ast.LastStatement{
+				ExpList: []ast.Exp{
+					ast.BinopExp{
+						Left: ast.PrefixExp{
+							Name: token.New("x", token.Position{2, 8, 8}, token.Name),
+						},
+						Binop: token.New("*", token.Position{2, 10, 10}, token.BinaryOperator),
+						Right: ast.SimpleExp{
+							Number: token.New("5", token.Position{2, 12, 12}, token.Number),
+						},
+					},
+				},
+			},
+		},
+	})
+}

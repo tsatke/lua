@@ -644,7 +644,7 @@ func (p *parser) exp() (exp ast.Exp) {
 			String: next,
 		}
 	case next.Is(token.UnaryOperator):
-		exp := p.exp()
+		exp = p.exp()
 		if exp == nil {
 			p.collectError(fmt.Errorf("expected expression after unary operator %s, but got nothing", next))
 			return nil

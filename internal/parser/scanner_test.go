@@ -103,11 +103,13 @@ func (suite *ScannerSuite) TestNumbers() {
 		})
 	suite.assertTokensString(`-1.5E7`,
 		[]token.Token{
-			token.New("-1.5E7", token.Position{1, 1, 0}, token.Number),
+			token.New("-", token.Position{1, 1, 0}, token.UnaryOperator, token.BinaryOperator),
+			token.New("1.5E7", token.Position{1, 2, 1}, token.Number),
 		})
 	suite.assertTokensString(`-.5`,
 		[]token.Token{
-			token.New("-.5", token.Position{1, 1, 0}, token.Number),
+			token.New("-", token.Position{1, 1, 0}, token.UnaryOperator, token.BinaryOperator),
+			token.New(".5", token.Position{1, 2, 1}, token.Number),
 		})
 	suite.assertTokensString(`.3E9`,
 		[]token.Token{

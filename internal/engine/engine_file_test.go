@@ -8,6 +8,25 @@ import (
 	"github.com/tsatke/lua/internal/engine/value"
 )
 
+func (suite *EngineSuite) TestBinop() {
+	suite.runFileTests("binop", []fileTest{
+		{
+			"binop01.lua",
+			nil,
+			"",
+			"450\n",
+			"",
+		},
+		{
+			"binop02.lua",
+			nil,
+			"",
+			"3\n-1\n2\n0.5\n0\n-1\n",
+			"",
+		},
+	})
+}
+
 func (suite *EngineSuite) TestDo() {
 	suite.runFileTests("do", []fileTest{
 		{
