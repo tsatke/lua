@@ -366,7 +366,17 @@ start:
 		}
 	case '-':
 		if s.check("--") { // EOL-comment
-			s.skipRemainingLine() // ignore everything until line-end
+			if s.hasMore(1) && s.input[s.pos] == '[' {
+				tk, ok := s.multilineString()
+				if !ok {
+					if tk.Is(token.Error) {
+						return tk, false
+					}
+				}
+				_ = tk // ignore string token, as it's a comment
+			} else {
+				s.skipRemainingLine() // ignore everything until line-end
+			}
 			goto start
 		} else if s.check("-") {
 			return s.token(token.UnaryOperator, token.BinaryOperator), true
@@ -528,7 +538,10 @@ func (s *inMemoryScanner) multilineString() (token.Token, bool) {
 	if content[0] == '\n' {
 		content = content[1:]
 	}
-	return token.New(content, s.tkpos(), token.String), true
+
+	tk := token.New(content, s.tkpos(), token.String)
+	s.updateStartPositions()
+	return tk, true
 }
 
 func (s *inMemoryScanner) ident() (token.Token, bool) {

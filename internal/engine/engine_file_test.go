@@ -8,6 +8,18 @@ import (
 	"github.com/tsatke/lua/internal/engine/value"
 )
 
+func (suite *EngineSuite) TestComment() {
+	suite.runFileTests("comment", []fileTest{
+		{
+			"comment01.lua",
+			nil,
+			"",
+			"",
+			"",
+		},
+	})
+}
+
 func (suite *EngineSuite) TestTable() {
 	suite.runFileTests("table", []fileTest{
 		{
