@@ -34,7 +34,7 @@ func (e *Engine) assert(args ...Value) ([]Value, error) {
 	if len(args) == 0 {
 		return nil, fmt.Errorf("need at least one argument to 'assert'")
 	}
-	if args[0] == Nil || args[0] == False {
+	if args[0] == nil || args[0] == Nil || args[0] == False {
 		if len(args) > 1 {
 			return e.error(args[1])
 		}
