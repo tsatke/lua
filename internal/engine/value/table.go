@@ -3,18 +3,18 @@ package value
 type Table struct {
 	Metatable *Table
 
-	Fields map[string]Value
+	Fields map[Value]Value
 }
 
 func NewTable() *Table {
 	return &Table{
-		Fields: make(map[string]Value),
+		Fields: make(map[Value]Value),
 	}
 }
 
 func (Table) Type() Type { return TypeTable }
 
-func (t *Table) Set(key string, value Value) {
+func (t *Table) Set(key Value, value Value) {
 	if value == Nil {
 		delete(t.Fields, key)
 	} else {
@@ -22,7 +22,7 @@ func (t *Table) Set(key string, value Value) {
 	}
 }
 
-func (t *Table) Get(key string) (Value, bool) {
+func (t *Table) Get(key Value) (Value, bool) {
 	val, ok := t.Fields[key]
 	return val, ok
 }

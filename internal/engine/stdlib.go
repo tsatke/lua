@@ -36,11 +36,9 @@ func (e *Engine) assert(args ...Value) ([]Value, error) {
 	}
 	if args[0] == Nil || args[0] == False {
 		if len(args) > 1 {
-			_, _ = e.error(args[1])
-			return nil, nil // unreachable
+			return e.error(args[1])
 		}
-		_, _ = e.error(NewString("assertion failed!"))
-		return nil, nil // unreachable
+		return e.error(NewString("assertion failed!"))
 	}
 	return args, nil
 }
@@ -249,7 +247,7 @@ func (e *Engine) setmetatable(args ...Value) ([]Value, error) {
 	}
 	metatable := args[0].(*Table).Metatable
 	if metatable != nil {
-		if _, ok := metatable.Get("__metatable"); ok {
+		if _, ok := metatable.Get(NewString("__metatable")); ok {
 			_, _ = e.error(NewString("original metatable has a __metatable field"))
 		}
 	}

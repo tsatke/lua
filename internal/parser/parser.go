@@ -135,51 +135,44 @@ func (p *parser) stmt() (stmt ast.Statement) {
 	}
 	switch {
 	case tk.Is(token.Name):
-		next, ok := p.next()
-		if !ok {
-			p.collectError(fmt.Errorf("unexpected EOF, expected one of ',', '=', ':' or '('"))
+		p.stash(tk)
+		prefixexp := p.prefixexp()
+		if prefixexp == nil {
+			p.collectError(ErrExpectedSomething("prefixexp"))
 			return nil
 		}
 
-		var assignment bool
-		if next.Is(token.Assign) {
-			assignment = true
-		} else if next.Is(token.ParLeft) {
-			assignment = false
-		} else {
-			// lookahead for either '=' or '(', and parse an assignment or a functioncall respectively
-			var lookahead []token.Token
-			for {
-				next, ok := p.next()
-				if !ok {
-					p.collectError(ErrUnexpectedEof("anything"))
-					return nil
-				}
-				lookahead = append(lookahead, next)
-				if next.Is(token.Assign) {
-					p.stash(lookahead...)
-					assignment = true
-					break
-				} else if next.Is(token.ParLeft) {
-					p.stash(lookahead...)
-					break
-				}
+		next, ok := p.next()
+		if !ok {
+			return ast.FunctionCall{
+				PrefixExp: prefixexp.(ast.PrefixExp),
+			}
+		}
+		if !(next.Is(token.Assign) || next.Is(token.Comma)) {
+			p.stash(next)
+			return ast.FunctionCall{
+				PrefixExp: prefixexp.(ast.PrefixExp),
 			}
 		}
 
-		p.stash(tk, next)
-		switch assignment {
-		case true:
-			return p.assignment()
-		case false:
-			// prefixexp -> functioncall
-			call, ok := p.functionCall()
-			if !ok {
-				p.collectError(fmt.Errorf("expected function call, but got nothing"))
+		varlist := []ast.Var{
+			{
+				PrefixExp: prefixexp.(ast.PrefixExp),
+			},
+		}
+		if next.Is(token.Comma) {
+			remainingVarList := p.varlist()
+			if len(remainingVarList) == 0 {
+				p.collectError(ErrExpectedSomething("varlist"))
 				return nil
 			}
-			return call
+			varlist = append(varlist, remainingVarList...)
+		} else {
+			p.stash(next)
 		}
+
+		assignment := p.assignmentWithVarlist(varlist)
+		return assignment
 	case tk.Is(token.Local):
 		next, ok := p.next()
 		if !ok {
@@ -542,9 +535,7 @@ func (p *parser) local() ast.Local {
 	}
 }
 
-func (p *parser) assignment() ast.Assignment {
-	varlist := p.varlist()
-
+func (p *parser) assignmentWithVarlist(varlist []ast.Var) ast.Assignment {
 	// check if there's a '=' between varlist and explist
 	assign, ok := p.next()
 	if !ok {
@@ -562,6 +553,11 @@ func (p *parser) assignment() ast.Assignment {
 		VarList: varlist,
 		ExpList: explist,
 	}
+}
+
+func (p *parser) assignment() ast.Assignment {
+	varlist := p.varlist()
+	return p.assignmentWithVarlist(varlist)
 }
 
 func (p *parser) namelist() []token.Token {
@@ -687,9 +683,17 @@ func (p *parser) exp() (exp ast.Exp) {
 			return nil
 		}
 		exp = fn
+	case next.Is(token.CurlyLeft):
+		p.stash(next)
+		tbl, ok := p.tableconstructor()
+		if !ok {
+			p.collectError(ErrExpectedSomething("table"))
+			return nil
+		}
+		exp = tbl
 	}
 	if exp == nil {
-		p.collectError(fmt.Errorf("tableconstructors are not supported yet (%s)", next))
+		p.collectError(ErrUnexpectedThing("either 'nil', 'false', 'true', '...', a number, a string, a unary operator, a name, 'function', '(' or '{'", next))
 		return
 	}
 
@@ -714,6 +718,104 @@ func (p *parser) exp() (exp ast.Exp) {
 		p.stash(lookahead)
 	}
 	return
+}
+
+func (p *parser) tableconstructor() (ast.TableConstructor, bool) {
+	if !p.requireToken(token.CurlyLeft) {
+		return ast.TableConstructor{}, false
+	}
+
+	next, ok := p.next()
+	if !ok {
+		p.collectError(ErrUnexpectedEof("field or '}'"))
+		return ast.TableConstructor{}, false
+	}
+	if next.Is(token.CurlyRight) {
+		return ast.TableConstructor{}, true
+	}
+	p.stash(next)
+
+	fields := p.fieldlist()
+
+	if !p.requireToken(token.CurlyRight) {
+		return ast.TableConstructor{}, false
+	}
+
+	return ast.TableConstructor{
+		Fields: fields,
+	}, true
+}
+
+func (p *parser) fieldlist() []ast.Field {
+	var fields []ast.Field
+
+	for {
+		field, ok := p.field()
+		if !ok {
+			if len(fields) == 0 {
+				break
+			}
+			p.collectError(ErrExpectedSomething("field"))
+			return nil
+		}
+		fields = append(fields, field)
+
+		next, ok := p.next()
+		if !ok {
+			break
+		}
+		if !(next.Is(token.Comma) || next.Is(token.SemiColon)) {
+			p.stash(next)
+			break
+		}
+	}
+
+	return fields
+}
+
+func (p *parser) field() (ast.Field, bool) {
+	next, ok := p.next()
+	if !ok {
+		p.collectError(ErrUnexpectedEof("name, '[' or exp"))
+		return ast.Field{}, false
+	}
+
+	var name token.Token
+	var leftExp ast.Exp
+
+	switch {
+	case next.Is(token.Name):
+		name = next
+	case next.Is(token.BracketLeft):
+
+		leftExp = p.exp()
+		if leftExp == nil {
+			p.collectError(ErrExpectedSomething("exp"))
+			return ast.Field{}, false
+		}
+
+		if !p.requireToken(token.BracketRight) {
+			return ast.Field{}, false
+		}
+	}
+
+	if name != nil || leftExp != nil {
+		if !p.requireToken(token.Assign) {
+			return ast.Field{}, false
+		}
+	}
+
+	rightExp := p.exp()
+	if rightExp == nil {
+		p.collectError(ErrExpectedSomething("exp"))
+		return ast.Field{}, false
+	}
+
+	return ast.Field{
+		LeftExp:  leftExp,
+		LeftName: name,
+		RightExp: rightExp,
+	}, true
 }
 
 func (p *parser) prefixexp() ast.Exp {

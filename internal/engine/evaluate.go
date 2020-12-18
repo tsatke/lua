@@ -16,12 +16,15 @@ func (e *Engine) evaluateChunk(chunk ast.Chunk) (vs []value.Value, err error) {
 		return nil, fmt.Errorf("create callable: %w", err)
 	}
 
-	fn := value.NewFunction("<anonymous>", luaFn)
+	fn := value.NewFunction(chunk.Name, luaFn)
 	results, err := e.call(fn)
 
 	var luaErr Error
 	if errors.As(err, &luaErr) {
 		return nil, luaErr
+	}
+	if err != nil {
+		return nil, err
 	}
 	return results, nil
 }
@@ -32,7 +35,7 @@ func (e *Engine) evaluateBlock(block ast.Block) ([]value.Value, error) {
 
 	for _, stmt := range block.StatementsWithoutLast() {
 		if _, err := e.evaluateStatement(stmt); err != nil {
-			return nil, fmt.Errorf("statement %T: %w", stmt, err)
+			return nil, fmt.Errorf("stmt: %w", err)
 		}
 	}
 
@@ -249,19 +252,59 @@ func (e *Engine) evaluateAssignment(assignment ast.Assignment) error {
 }
 
 func (e *Engine) evaluateAssign(v ast.Var, val value.Value) error {
-	if v.Name == nil {
-		return fmt.Errorf("can only assign to simple variable")
+	if len(v.Fragments) == 0 {
+		name := v.Name.Value()
+		scope := e._G
+		// if the variable is already declared in the current scope (either
+		// we are currently in the global scope, or the variable has been declared
+		// with 'local'), assign in the current scope
+		if _, ok := e.currentScope().Fields[value.NewString(name)]; ok {
+			scope = e.currentScope()
+		}
+		e.assign(scope, name, val)
+		return nil
 	}
 
-	name := v.Name.Value()
-	scope := e._G
-	// if the variable is already declared in the current scope (either
-	// we are currently in the global scope, or the variable has been declared
-	// with 'local'), assign in the current scope
-	if _, ok := e.currentScope().Fields[name]; ok {
-		scope = e.currentScope()
+	targetExp := ast.PrefixExp{
+		Name:      v.Name,
+		Exp:       v.Exp,
+		Fragments: v.Fragments,
 	}
-	e.assign(scope, name, val)
+
+	targetExp.Fragments = v.Fragments[:len(v.Fragments)-1]
+
+	lastFragment := v.Fragments[len(v.Fragments)-1]
+	if lastFragment.Args != nil {
+		return fmt.Errorf("cannot assign to a function call")
+	}
+
+	targets, err := e.evaluatePrefixExpression(targetExp)
+	if err != nil {
+		return err
+	}
+	if len(targets) == 0 {
+		return fmt.Errorf("cannot assign to nil value")
+	}
+	target := targets[0]
+
+	table, ok := target.(*value.Table)
+	if !ok {
+		return fmt.Errorf("cannot index variable of type %s", target.Type())
+	}
+
+	if lastFragment.Name != nil {
+		e.assign(table, lastFragment.Name.Value(), val)
+	} else {
+		results, err := e.evaluateExpression(lastFragment.Exp)
+		if err != nil {
+			return fmt.Errorf("index exp: %w", err)
+		}
+		if len(results) == 0 {
+			return fmt.Errorf("index exp didn't evaluate to any value")
+		}
+		key := results[0]
+		table.Set(key, val)
+	}
 	return nil
 }
 
@@ -306,9 +349,46 @@ func (e *Engine) evaluateComplexExpression(exp ast.ComplexExp) ([]value.Value, e
 		return e.evaluateBinopExpression(ex)
 	case ast.Function:
 		return e.evaluateFunction(ex)
+	case ast.TableConstructor:
+		return e.evaluateTableConstructor(ex)
 	default:
 		return nil, fmt.Errorf("%T unsupported", exp)
 	}
+}
+
+func (e *Engine) evaluateTableConstructor(tblCtor ast.TableConstructor) ([]value.Value, error) {
+	tbl := value.NewTable()
+
+	anonymousFieldIndex := 1
+	for _, field := range tblCtor.Fields {
+		var key value.Value
+		if field.Anonymous() {
+			key = value.NewNumber(float64(anonymousFieldIndex))
+			anonymousFieldIndex++
+		} else if field.LeftName != nil {
+			key = value.NewString(field.LeftName.Value())
+		} else {
+			vals, err := e.evaluateExpression(field.LeftExp)
+			if err != nil {
+				return nil, fmt.Errorf("left exp: %w", err)
+			}
+			if len(vals) == 0 {
+				return nil, fmt.Errorf("left exp didn't evaluate to any value")
+			}
+			key = vals[0]
+		}
+
+		vals, err := e.evaluateExpression(field.RightExp)
+		if err != nil {
+			return nil, fmt.Errorf("right exp: %w", err)
+		}
+		if len(vals) == 0 {
+			return nil, fmt.Errorf("right exp didn't evaluate to any value")
+		}
+		val := vals[0]
+		tbl.Set(key, val)
+	}
+	return values(tbl), nil
 }
 
 func (e *Engine) evaluateUnopExpression(exp ast.UnopExp) ([]value.Value, error) {
@@ -628,53 +708,73 @@ func (e *Engine) evaluatePrefixExpression(exp ast.PrefixExp) ([]value.Value, err
 
 	for i, fragment := range exp.Fragments {
 		if current == nil {
+			if fragment.Args != nil {
+				return nil, fmt.Errorf("cannot call nil value of variable '%s'", currentName)
+			}
 			return nil, fmt.Errorf("cannot index nil value of variable '%s'", currentName)
 		}
 
 		results = nil
 
 		if fragment.Exp != nil {
-			return nil, fmt.Errorf("explicit indexing (a.[x]) not supported yet")
-		}
-
-		if fragment.Name != nil {
 			table, ok := current.(*value.Table)
 			if !ok {
 				return nil, fmt.Errorf("cannot index variable of type %s", current.Type())
 			}
-			current, ok = table.Get(fragment.Name.Value())
-			if !ok {
-				return nil, fmt.Errorf("variable '%s' has no field '%s'", currentName, fragment.Name.Value())
-			}
-			currentName = fragment.Name.Value()
-		}
-
-		if fragment.Args != nil {
-			// this fragment is a function call
-
-			fn, ok := current.(*value.Function)
-			if !ok {
-				return nil, fmt.Errorf("cannot call non-function variable '%s'", currentName)
-			}
-
-			args, err := e.evaluateArgs(*fragment.Args)
+			vals, err := e.evaluateExpression(fragment.Exp)
 			if err != nil {
-				return nil, fmt.Errorf("args: %w", err)
+				return nil, fmt.Errorf("index exp: %w", err)
+			}
+			if len(vals) == 0 {
+				return nil, fmt.Errorf("index exp didn't evaluate to any value")
+			}
+			current, _ = table.Get(vals[0])
+			if current == nil {
+				current = value.Nil
+			}
+			results = values(current)
+			currentName = currentName + "[<index>]"
+		} else {
+			if fragment.Name != nil {
+				table, ok := current.(*value.Table)
+				if !ok {
+					return nil, fmt.Errorf("cannot index variable of type %s", current.Type())
+				}
+				current, ok = table.Get(value.NewString(fragment.Name.Value()))
+				if !ok {
+					return nil, fmt.Errorf("variable '%s' has no field '%s'", currentName, fragment.Name.Value())
+				}
+				results = values(current)
+				currentName = fragment.Name.Value()
 			}
 
-			res, err := e.call(fn, args...)
-			if err != nil {
-				return nil, fmt.Errorf("call '%s': %w", currentName, err)
-			}
-			results = res
-			if len(res) == 0 && i < len(exp.Fragments)-1 {
-				// One fragment function call can only return nil, if it's the last fragment. Otherwise,
-				// subsequent calls would attempt to call something on nil.
-				return nil, fmt.Errorf("calling '%s' returned nil, but it is not the last call in the chain", currentName)
-			}
-			if len(res) > 0 {
-				current = res[0]
-				currentName += "(...)"
+			if fragment.Args != nil {
+				// this fragment is a function call
+
+				fn, ok := current.(*value.Function)
+				if !ok {
+					return nil, fmt.Errorf("cannot call non-function variable '%s'", currentName)
+				}
+
+				args, err := e.evaluateArgs(*fragment.Args)
+				if err != nil {
+					return nil, fmt.Errorf("args: %w", err)
+				}
+
+				res, err := e.call(fn, args...)
+				if err != nil {
+					return nil, fmt.Errorf("call '%s': %w", currentName, err)
+				}
+				results = res
+				if len(res) == 0 && i < len(exp.Fragments)-1 {
+					// One fragment function call can only return nil, if it's the last fragment. Otherwise,
+					// subsequent calls would attempt to call something on nil.
+					return nil, fmt.Errorf("calling '%s' returned nil, but it is not the last call in the chain", currentName)
+				}
+				if len(res) > 0 {
+					current = res[0]
+					currentName += "(...)"
+				}
 			}
 		}
 	}

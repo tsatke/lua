@@ -52,7 +52,7 @@ a()
 			Name: "a",
 		},
 		{
-			Name: "<anonymous>",
+			Name: "<unknown input>",
 		},
 	}, err.(Error).Stack)
 }

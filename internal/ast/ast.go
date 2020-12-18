@@ -33,6 +33,10 @@ type (
 	}
 )
 
+func (f Field) Anonymous() bool {
+	return f.LeftExp == nil && f.LeftName == nil
+}
+
 // StatementsWithoutLast returns all statements in this Block that are not a
 // LastStatement.
 func (b Block) StatementsWithoutLast() []Statement {

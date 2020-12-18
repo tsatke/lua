@@ -8,6 +8,65 @@ import (
 	"github.com/tsatke/lua/internal/engine/value"
 )
 
+func (suite *EngineSuite) TestTable() {
+	suite.runFileTests("table", []fileTest{
+		{
+			"table01.lua",
+			nil,
+			"",
+			"",
+			"",
+		},
+		{
+			"table02.lua",
+			nil,
+			"",
+			"9\n",
+			"",
+		},
+		{
+			"table03.lua",
+			nil,
+			"",
+			"9\n10\n",
+			"",
+		},
+		{
+			"table04.lua",
+			nil,
+			"",
+			"nil\nfoobar\n",
+			"",
+		},
+		{
+			"table05.lua",
+			nil,
+			"",
+			"foobar\n",
+			"",
+		},
+	})
+}
+
+func (suite *EngineSuite) TestAssert() {
+	suite.runFileTests("assert", []fileTest{
+		{
+			"assert01.lua",
+			nil,
+			"",
+			"",
+			"",
+		},
+		{
+			"assert02.lua",
+			nil,
+			"must happen",
+			"",
+			"",
+		},
+	})
+}
+
 func (suite *EngineSuite) TestBinop() {
 	suite.runFileTests("binop", []fileTest{
 		{

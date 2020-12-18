@@ -137,7 +137,7 @@ func (e Engine) dumpState() {
 }
 
 func (e *Engine) assign(scope *value.Table, name string, val value.Value) {
-	scope.Set(name, val)
+	scope.Set(value.NewString(name), val)
 }
 
 func (e *Engine) enterNewScope() {
@@ -153,7 +153,7 @@ func (e *Engine) leaveScope() {
 // scope and always visiting the parent scope if there is no such variable.
 func (e *Engine) variable(name string) (value.Value, bool) {
 	for i := 0; i < len(e.scopes); i++ {
-		if val, ok := e.scopes[i].Fields[name]; ok {
+		if val, ok := e.scopes[i].Fields[value.NewString(name)]; ok {
 			return val, true
 		}
 	}
