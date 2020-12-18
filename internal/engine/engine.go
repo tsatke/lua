@@ -2,6 +2,7 @@ package engine
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -159,23 +160,39 @@ func (e *Engine) variable(name string) (value.Value, bool) {
 	return nil, false
 }
 
-func (e *Engine) call(fn *value.Function, args ...value.Value) ([]value.Value, error) {
+func (e *Engine) call(fn *value.Function, args ...value.Value) (vs []value.Value, err error) {
 	e.enterNewScope()
 	defer e.leaveScope()
 
 	if ok := e.stack.Push(StackFrame{
 		Name: fn.Name,
 	}); !ok {
-		_, _ = e.error(value.NewString(fmt.Sprintf("Stack overflow while calling '%s'", fn.Name)))
-		return nil, fmt.Errorf("Stack overflow")
+		return e.error(value.NewString(fmt.Sprintf("Stack overflow while calling '%s'", fn.Name)))
 	}
 	defer e.stack.Pop()
 
-	results, err := fn.Callable(args...)
-	if err != nil {
-		return nil, fmt.Errorf("error while calling '%s': %w", fn.Name, err)
-	}
-	return results, nil
+	res, err := func() (vs []value.Value, err error) {
+		defer func(vs *[]value.Value) {
+			if r := recover(); r != nil {
+				if ret, ok := r.(Return); ok {
+					*vs = ret.Values
+				} else {
+					panic(r)
+				}
+			}
+		}(&vs)
+
+		results, err := fn.Callable(args...)
+		if err != nil {
+			var luaErr Error
+			if errors.As(err, &luaErr) {
+				return nil, luaErr
+			}
+			return nil, fmt.Errorf("error while calling '%s': %w", fn.Name, err)
+		}
+		return results, nil
+	}()
+	return res, err
 }
 
 func (e *Engine) createCallable(parameters ast.ParList, block ast.Block) (value.LuaFn, error) {

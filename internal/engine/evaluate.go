@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -9,28 +10,20 @@ import (
 	"github.com/tsatke/lua/internal/token"
 )
 
-func (e *Engine) protect(errToSet *error) {
-	if r := recover(); r != nil {
-		if luaErr, ok := r.(Error); ok {
-			*errToSet = luaErr
-		} else {
-			panic(r)
-		}
-	}
-}
-
 func (e *Engine) evaluateChunk(chunk ast.Chunk) (vs []value.Value, err error) {
-	defer e.protect(&err) // chunks are run just as blocks, but protected
-
-	if ok := e.stack.Push(StackFrame{
-		Name: chunk.Name,
-	}); !ok {
-		_, _ = e.error(value.NewString("Stack overflow while evaluating chunk"))
-		return nil, fmt.Errorf("stack overflow")
+	luaFn, err := e.createCallable(ast.ParList{}, chunk.Block)
+	if err != nil {
+		return nil, fmt.Errorf("create callable: %w", err)
 	}
-	defer e.stack.Pop()
 
-	return e.evaluateBlock(chunk.Block)
+	fn := value.NewFunction("<anonymous>", luaFn)
+	results, err := e.call(fn)
+
+	var luaErr Error
+	if errors.As(err, &luaErr) {
+		return nil, luaErr
+	}
+	return results, nil
 }
 
 func (e *Engine) evaluateBlock(block ast.Block) ([]value.Value, error) {
@@ -83,7 +76,9 @@ func (e *Engine) evaluateLastStatement(stmt ast.LastStatement) ([]value.Value, e
 	if err != nil {
 		return nil, fmt.Errorf("explist: %w", err)
 	}
-	return results, nil
+	panic(Return{
+		Values: results,
+	})
 }
 
 func (e *Engine) evaluateIfBlock(block ast.IfBlock) ([]value.Value, error) {
@@ -176,7 +171,7 @@ func (e *Engine) evaluateLocal(local ast.Local) error {
 	return nil
 }
 
-func (e *Engine) evaluateFunctionCall(call ast.FunctionCall) ([]value.Value, error) {
+func (e *Engine) evaluateFunctionCall(call ast.FunctionCall) (vs []value.Value, err error) {
 	prefixExp := call.PrefixExp
 	if prefixExp.Exp != nil {
 		return nil, fmt.Errorf("expression calls are not supported yet")

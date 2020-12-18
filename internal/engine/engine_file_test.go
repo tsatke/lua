@@ -100,6 +100,15 @@ func (suite *EngineSuite) TestReturn() {
 			"",
 			"",
 		},
+		{
+			"return02.lua",
+			[]value.Value{
+				value.NewString("hello"),
+			},
+			"",
+			"",
+			"",
+		},
 	})
 }
 
@@ -133,7 +142,14 @@ func (suite *EngineSuite) TestPcall() {
 			"pcall01.lua",
 			nil,
 			"",
-			"false	error message\nprint message\ntrue\n",
+			"false	error message\n",
+			"",
+		},
+		{
+			"pcall02.lua",
+			nil,
+			"",
+			"print message\ntrue\n",
 			"",
 		},
 	})

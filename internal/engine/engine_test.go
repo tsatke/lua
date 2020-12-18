@@ -52,7 +52,7 @@ a()
 			Name: "a",
 		},
 		{
-			Name: "<unknown input>",
+			Name: "<anonymous>",
 		},
 	}, err.(Error).Stack)
 }
@@ -105,10 +105,11 @@ func (suite *EngineSuite) TestLuaSuite() {
 		}
 		suite.Fail("lua tests failed")
 	}
-	suite.Len(results, 1)
-	rc := results[0]
-	suite.EqualValues(rc.(value.Number).Value(), 0, "RC != 0")
 
 	suite.T().Logf("stdout (%d bytes):\n%s", len(stdout.Bytes()), stdout.String())
 	suite.T().Logf("stderr (%d bytes):\n%s", len(stderr.Bytes()), stderr.String())
+
+	suite.Require().Len(results, 1)
+	rc := results[0]
+	suite.EqualValues(rc.(value.Number).Value(), 0, "RC != 0")
 }

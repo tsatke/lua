@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -133,11 +134,12 @@ func (e *Engine) error(args ...Value) ([]Value, error) {
 		level = args[1]
 	}
 	stack = e.stack.Slice()
-	panic(Error{
+	return nil, Error{
+		e:       e,
 		Message: message,
 		Level:   level,
 		Stack:   stack,
-	})
+	}
 }
 
 func (e *Engine) getmetatable(args ...Value) ([]Value, error) {
@@ -164,8 +166,6 @@ func (e *Engine) pcall(args ...Value) ([]Value, error) {
 	}
 
 	results, err := func() (res []Value, recoveredErr error) {
-		defer e.protect(&recoveredErr)
-
 		fn := args[0]
 		if fn.Type() != TypeFunction {
 			return nil, fmt.Errorf("bad argument to 'pcall' (%s expected, got %s)", TypeFunction, fn.Type())
@@ -173,6 +173,11 @@ func (e *Engine) pcall(args ...Value) ([]Value, error) {
 		fnVal := fn.(*Function)
 		results, err := e.call(fnVal, args[1:]...)
 		if err != nil {
+			var luaErr Error
+			if errors.As(err, &luaErr) {
+				return nil, luaErr
+			}
+
 			// this happens if the call fails internally, not if 'error' has been called
 			return nil, fmt.Errorf("call: %w", err)
 		}
