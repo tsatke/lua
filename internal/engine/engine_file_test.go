@@ -8,6 +8,18 @@ import (
 	"github.com/tsatke/lua/internal/engine/value"
 )
 
+func (suite *EngineSuite) TestRepeat() {
+	suite.runFileTests("repeat", []fileTest{
+		{
+			"repeat01.lua",
+			nil,
+			"",
+			"a=0\na=1\na=2\na=3\na=4\nfinally a=5\n",
+			"",
+		},
+	})
+}
+
 func (suite *EngineSuite) TestComment() {
 	suite.runFileTests("comment", []fileTest{
 		{

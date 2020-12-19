@@ -66,8 +66,32 @@ func (e *Engine) evaluateStatement(stmt ast.Statement) ([]value.Value, error) {
 		return e.evaluateDoBlock(s)
 	case ast.LastStatement:
 		return e.evaluateLastStatement(s)
+	case ast.RepeatBlock:
+		return e.evaluateRepeatBlock(s)
 	}
 	return nil, fmt.Errorf("%T unsupported", stmt)
+}
+
+func (e *Engine) evaluateRepeatBlock(block ast.RepeatBlock) ([]value.Value, error) {
+	for {
+		_, err := e.evaluateBlock(block.Repeat)
+		if err != nil {
+			return nil, fmt.Errorf("block: %w", err)
+		}
+
+		results, err := e.evaluateExpression(block.Until)
+		if err != nil {
+			return nil, fmt.Errorf("exp: %w", err)
+		}
+		if len(results) == 0 {
+			return nil, fmt.Errorf("expression didn't evaluate to any value")
+		}
+		result := results[0]
+		if e.valueIsLogicallyTrue(result) {
+			break
+		}
+	}
+	return nil, nil
 }
 
 func (e *Engine) evaluateLastStatement(stmt ast.LastStatement) ([]value.Value, error) {
@@ -229,6 +253,7 @@ func (e *Engine) evaluateAssignment(assignment ast.Assignment) error {
 				return fmt.Errorf("assign: %w", err)
 			}
 		}
+		return nil
 	}
 
 	varAmount, expAmount := len(assignment.VarList), len(assignment.ExpList)

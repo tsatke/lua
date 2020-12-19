@@ -46,6 +46,13 @@ func New(input io.Reader) (Parser, error) {
 func (p *parser) Parse() (ast.Chunk, bool) {
 	block := p.block()
 
+	next, ok := p.next()
+	if ok {
+		// not all tokens consumed
+		p.collectError(ErrUnexpectedThing("a statement or eof", next))
+		return ast.Chunk{}, false
+	}
+
 	name := "<unknown input>"
 	if n, ok := p.input.(namer); ok {
 		name = filepath.Base(n.Name())
@@ -176,7 +183,7 @@ func (p *parser) stmt() (stmt ast.Statement) {
 	case tk.Is(token.Local):
 		next, ok := p.next()
 		if !ok {
-			p.collectError(fmt.Errorf("unexpected EOF, expected either 'function' or a name"))
+			p.collectError(ErrUnexpectedEof("'function' or a name"))
 			return nil
 		}
 
@@ -191,7 +198,7 @@ func (p *parser) stmt() (stmt ast.Statement) {
 		p.stash(tk)
 		fn, ok := p.function()
 		if !ok {
-			p.collectError(fmt.Errorf("expected function, but got nothing"))
+			p.collectError(ErrExpectedSomething("function"))
 			return nil
 		}
 		return fn
@@ -199,7 +206,7 @@ func (p *parser) stmt() (stmt ast.Statement) {
 		p.stash(tk)
 		ifBlock, ok := p.if_()
 		if !ok {
-			p.collectError(fmt.Errorf("expected if block, but got nothing"))
+			p.collectError(ErrExpectedSomething("if block"))
 			return nil
 		}
 		return ifBlock
@@ -207,13 +214,48 @@ func (p *parser) stmt() (stmt ast.Statement) {
 		p.stash(tk)
 		doBlock, ok := p.do()
 		if !ok {
-			p.collectError(fmt.Errorf("expected do block, but got nothing"))
+			p.collectError(ErrExpectedSomething("do block"))
 			return nil
 		}
 		return doBlock
+	case tk.Is(token.Repeat):
+		p.stash(tk)
+		repeatBlock, ok := p.repeat()
+		if !ok {
+			p.collectError(ErrExpectedSomething("repeat block"))
+			return nil
+		}
+		return repeatBlock
 	}
 	p.stash(tk)
 	return nil
+}
+
+func (p *parser) repeat() (ast.RepeatBlock, bool) {
+	if !p.requireToken(token.Repeat) {
+		return ast.RepeatBlock{}, false
+	}
+
+	block := p.block()
+	if block == nil {
+		p.collectError(ErrExpectedSomething("block"))
+		return ast.RepeatBlock{}, false
+	}
+
+	if !p.requireToken(token.Until) {
+		return ast.RepeatBlock{}, false
+	}
+
+	exp := p.exp()
+	if exp == nil {
+		p.collectError(ErrExpectedSomething("exp"))
+		return ast.RepeatBlock{}, false
+	}
+
+	return ast.RepeatBlock{
+		Repeat: block,
+		Until:  exp,
+	}, true
 }
 
 func (p *parser) do() (ast.DoBlock, bool) {
