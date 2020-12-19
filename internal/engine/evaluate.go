@@ -68,8 +68,32 @@ func (e *Engine) evaluateStatement(stmt ast.Statement) ([]value.Value, error) {
 		return e.evaluateLastStatement(s)
 	case ast.RepeatBlock:
 		return e.evaluateRepeatBlock(s)
+	case ast.WhileBlock:
+		return e.evaluateWhileBlock(s)
 	}
 	return nil, fmt.Errorf("%T unsupported", stmt)
+}
+
+func (e *Engine) evaluateWhileBlock(block ast.WhileBlock) ([]value.Value, error) {
+	for {
+		results, err := e.evaluateExpression(block.While)
+		if err != nil {
+			return nil, fmt.Errorf("exp: %w", err)
+		}
+		if len(results) == 0 {
+			return nil, fmt.Errorf("expression didn't evaluate to any value")
+		}
+		result := results[0]
+		if !e.valueIsLogicallyTrue(result) {
+			break
+		}
+
+		_, err = e.evaluateBlock(block.Do)
+		if err != nil {
+			return nil, fmt.Errorf("block: %w", err)
+		}
+	}
+	return nil, nil
 }
 
 func (e *Engine) evaluateRepeatBlock(block ast.RepeatBlock) ([]value.Value, error) {

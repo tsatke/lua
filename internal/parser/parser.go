@@ -226,9 +226,48 @@ func (p *parser) stmt() (stmt ast.Statement) {
 			return nil
 		}
 		return repeatBlock
+	case tk.Is(token.While):
+		p.stash(tk)
+		whileBlock, ok := p.while()
+		if !ok {
+			p.collectError(ErrExpectedSomething("while block"))
+			return nil
+		}
+		return whileBlock
 	}
 	p.stash(tk)
 	return nil
+}
+
+func (p *parser) while() (ast.WhileBlock, bool) {
+	if !p.requireToken(token.While) {
+		return ast.WhileBlock{}, false
+	}
+
+	exp := p.exp()
+	if exp == nil {
+		p.collectError(ErrExpectedSomething("exp"))
+		return ast.WhileBlock{}, false
+	}
+
+	if !p.requireToken(token.Do) {
+		return ast.WhileBlock{}, false
+	}
+
+	block := p.block()
+	if block == nil {
+		p.collectError(ErrExpectedSomething("block"))
+		return ast.WhileBlock{}, false
+	}
+
+	if !p.requireToken(token.End) {
+		return ast.WhileBlock{}, false
+	}
+
+	return ast.WhileBlock{
+		While: exp,
+		Do:    block,
+	}, true
 }
 
 func (p *parser) repeat() (ast.RepeatBlock, bool) {
