@@ -285,7 +285,30 @@ func (e *Engine) tostring(args ...Value) ([]Value, error) {
 	case TypeNumber:
 		return values(NewString(strconv.FormatFloat(float64(value.(Number)), 'G', -1, 64))), nil
 	}
-	return nil, fmt.Errorf("unsupported type %s", value.Type())
+	return nil, fmt.Errorf("unsupported type %s to 'tostring'", value.Type())
+}
+
+func (e *Engine) tonumber(args ...Value) ([]Value, error) {
+	if len(args) == 0 {
+		return nil, fmt.Errorf("need one argument to 'tonumber'")
+	}
+
+	if args[0] == nil {
+		return values(Nil), nil
+	}
+
+	value := args[0]
+	switch value.Type() {
+	case TypeNumber:
+		return values(value), nil
+	case TypeString:
+		num, err := strconv.ParseFloat(value.(String).String(), 64)
+		if err != nil {
+			return values(Nil), nil
+		}
+		return values(NewNumber(num)), nil
+	}
+	return values(Nil), nil
 }
 
 func (e *Engine) type_(args ...Value) ([]Value, error) {

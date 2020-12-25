@@ -8,6 +8,39 @@ import (
 	"github.com/tsatke/lua/internal/engine/value"
 )
 
+func (suite *EngineSuite) TestFor() {
+	suite.runFileTests("for", []fileTest{
+		{
+			"for01.lua",
+			nil,
+			"",
+			"0\n1\n2\n3\n4\n5\nend\nnil\n",
+			"",
+		},
+		{
+			"for02.lua",
+			nil,
+			"",
+			"1\n3\n5\nend\n",
+			"",
+		},
+		{
+			"for03.lua",
+			nil,
+			"",
+			"1\nend\n",
+			"",
+		},
+		{
+			"for04.lua",
+			nil,
+			"",
+			"0\n1\n2\n3\n4\n5\nend\n",
+			"",
+		},
+	})
+}
+
 func (suite *EngineSuite) TestLocal() {
 	suite.runFileTests("local", []fileTest{
 		{

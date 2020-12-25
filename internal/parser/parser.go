@@ -244,9 +244,93 @@ func (p *parser) stmt() (stmt ast.Statement) {
 			return nil
 		}
 		return whileBlock
+	case tk.Is(token.For):
+		p.stash(tk)
+		forBlock, ok := p.forBlock()
+		if !ok {
+			p.collectError(ErrExpectedSomething("for block"))
+			return nil
+		}
+		return forBlock
 	}
 	p.stash(tk)
 	return nil
+}
+
+func (p *parser) forBlock() (ast.ForBlock, bool) {
+	if !p.requireToken(token.For) {
+		return ast.ForBlock{}, false
+	}
+
+	name, ok := p.next()
+	if !ok {
+		p.collectError(ErrUnexpectedEof("name"))
+		return ast.ForBlock{}, false
+	}
+	if !name.Is(token.Name) {
+		p.collectError(ErrUnexpectedThing("name", name))
+		return ast.ForBlock{}, false
+	}
+
+	if !p.requireToken(token.Assign) {
+		return ast.ForBlock{}, false
+	}
+
+	from := p.exp()
+	if from == nil {
+		p.collectError(ErrExpectedSomething("exp (from)"))
+		return ast.ForBlock{}, false
+	}
+
+	if !p.requireToken(token.Comma) {
+		return ast.ForBlock{}, false
+	}
+
+	to := p.exp()
+	if to == nil {
+		p.collectError(ErrExpectedSomething("exp (to)"))
+		return ast.ForBlock{}, false
+	}
+
+	next, ok := p.next()
+	if !ok {
+		p.collectError(ErrUnexpectedEof("comma or 'do'"))
+		return ast.ForBlock{}, false
+	}
+
+	var step ast.Exp
+
+	if next.Is(token.Comma) {
+		step = p.exp()
+		if step == nil {
+			p.collectError(ErrUnexpectedEof("exp (step)"))
+			return ast.ForBlock{}, false
+		}
+	} else {
+		p.stash(next)
+	}
+
+	if !p.requireToken(token.Do) {
+		return ast.ForBlock{}, false
+	}
+
+	block := p.block()
+	if block == nil {
+		p.collectError(ErrExpectedSomething("block"))
+		return ast.ForBlock{}, false
+	}
+
+	if !p.requireToken(token.End) {
+		return ast.ForBlock{}, false
+	}
+
+	return ast.ForBlock{
+		Name: name,
+		From: from,
+		To:   to,
+		Step: step,
+		Do:   block,
+	}, true
 }
 
 func (p *parser) localFunction() (ast.LocalFunction, bool) {

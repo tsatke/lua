@@ -72,8 +72,85 @@ func (e *Engine) evaluateStatement(stmt ast.Statement) ([]value.Value, error) {
 		return e.evaluateRepeatBlock(s)
 	case ast.WhileBlock:
 		return e.evaluateWhileBlock(s)
+	case ast.ForBlock:
+		return e.evaluateForBlock(s)
 	}
 	return nil, fmt.Errorf("%T unsupported", stmt)
+}
+
+func (e *Engine) evaluateForBlock(block ast.ForBlock) ([]value.Value, error) {
+	var from, to, step float64
+
+	results, err := e.evaluateExpression(block.From)
+	if err != nil {
+		return nil, fmt.Errorf("exp (from): %w", err)
+	}
+	if len(results) == 0 {
+		return nil, fmt.Errorf("expression didn't evaluate to any value")
+	}
+
+	fromNums, err := e.tonumber(results[0])
+	if err != nil {
+		return nil, fmt.Errorf("need a number as from-argument in for loop")
+	}
+
+	from = fromNums[0].(value.Number).Value()
+
+	results, err = e.evaluateExpression(block.To)
+	if err != nil {
+		return nil, fmt.Errorf("exp (to): %w", err)
+	}
+	if len(results) == 0 {
+		return nil, fmt.Errorf("expression didn't evaluate to any value")
+	}
+
+	toNums, err := e.tonumber(results[0])
+	if err != nil {
+		return nil, fmt.Errorf("need a number as to-argument in for loop")
+	}
+
+	to = toNums[0].(value.Number).Value()
+
+	if block.Step != nil {
+		results, err = e.evaluateExpression(block.Step)
+		if err != nil {
+			return nil, fmt.Errorf("exp (step): %w", err)
+		}
+		if len(results) == 0 {
+			return nil, fmt.Errorf("expression didn't evaluate to any value")
+		}
+
+		stepNums, err := e.tonumber(results[0])
+		if err != nil {
+			return nil, fmt.Errorf("need a number as step-argument in for loop")
+		}
+
+		step = stepNums[0].(value.Number).Value()
+	} else {
+		step = 1 // default value for step
+	}
+
+	e.enterNewScope()
+	defer e.leaveScope()
+
+	forScope := e.currentScope()
+
+	// begin implementation as stated in the documentation
+
+	from -= step
+	for {
+		from += step
+		if (step >= 0 && from > to) || (step < 0 && from < to) {
+			break
+		}
+		e.assign(forScope, block.Name.Value(), value.NewNumber(from))
+
+		_, err = e.evaluateBlock(block.Do)
+		if err != nil {
+			return nil, fmt.Errorf("block: %w", err)
+		}
+	}
+	return nil, nil
 }
 
 func (e *Engine) evaluateLocalFunction(fn ast.LocalFunction) ([]value.Value, error) {
