@@ -190,9 +190,19 @@ func (p *parser) stmt() (stmt ast.Statement) {
 		p.stash(tk, next)
 		switch {
 		case next.Is(token.Name):
-			return p.local()
+			local, ok := p.local()
+			if !ok {
+				p.collectError(ErrExpectedSomething("local"))
+				return nil
+			}
+			return local
 		case next.Is(token.Function):
-			panic("unsupported")
+			localFn, ok := p.localFunction()
+			if !ok {
+				p.collectError(ErrExpectedSomething("local"))
+				return nil
+			}
+			return localFn
 		}
 	case tk.Is(token.Function):
 		p.stash(tk)
@@ -237,6 +247,36 @@ func (p *parser) stmt() (stmt ast.Statement) {
 	}
 	p.stash(tk)
 	return nil
+}
+
+func (p *parser) localFunction() (ast.LocalFunction, bool) {
+	if !p.requireToken(token.Local) {
+		return ast.LocalFunction{}, false
+	}
+	if !p.requireToken(token.Function) {
+		return ast.LocalFunction{}, false
+	}
+
+	name, ok := p.next()
+	if !ok {
+		p.collectError(ErrUnexpectedEof("name"))
+		return ast.LocalFunction{}, false
+	}
+	if !name.Is(token.Name) {
+		p.collectError(ErrUnexpectedThing("name", name))
+		return ast.LocalFunction{}, false
+	}
+
+	body, ok := p.funcbody()
+	if !ok {
+		p.collectError(ErrExpectedSomething("funcbody"))
+		return ast.LocalFunction{}, false
+	}
+
+	return ast.LocalFunction{
+		Name:     name,
+		FuncBody: body,
+	}, true
 }
 
 func (p *parser) while() (ast.WhileBlock, bool) {
@@ -391,17 +431,11 @@ func (p *parser) requireToken(typ token.Type) bool {
 }
 
 func (p *parser) function() (ast.Function, bool) {
-	next, ok := p.next()
-	if !ok {
-		p.collectError(ErrUnexpectedEof("function"))
-		return ast.Function{}, false
-	}
-	if !next.Is(token.Function) {
-		p.collectError(ErrUnexpectedThing("function", next))
+	if !p.requireToken(token.Function) {
 		return ast.Function{}, false
 	}
 
-	next, ok = p.next()
+	next, ok := p.next()
 	if !ok {
 		p.collectError(ErrUnexpectedEof("name or body"))
 		return ast.Function{}, false
@@ -586,13 +620,15 @@ func (p *parser) parlist() (ast.ParList, bool) {
 	}, true
 }
 
-func (p *parser) local() ast.Local {
+func (p *parser) local() (ast.Local, bool) {
 	localKeyword, ok := p.next()
 	if !ok {
 		p.collectError(fmt.Errorf("expected 'local', but got EOF"))
+		return ast.Local{}, false
 	}
 	if !localKeyword.Is(token.Local) {
 		p.collectError(fmt.Errorf("expected 'local', but got %s", localKeyword))
+		return ast.Local{}, false
 	}
 
 	namelist := p.namelist()
@@ -601,11 +637,11 @@ func (p *parser) local() ast.Local {
 	assign, ok := p.next()
 	if !ok {
 		p.collectError(fmt.Errorf("expected '=' followed by explist, but got EOF"))
-		return ast.Local{}
+		return ast.Local{}, false
 	}
 	if !assign.Is(token.Assign) {
 		p.collectError(fmt.Errorf("expected '=' followed by explist, but got %s", assign))
-		return ast.Local{}
+		return ast.Local{}, false
 	}
 
 	explist := p.explist()
@@ -613,7 +649,7 @@ func (p *parser) local() ast.Local {
 	return ast.Local{
 		NameList: namelist,
 		ExpList:  explist,
-	}
+	}, true
 }
 
 func (p *parser) assignmentWithVarlist(varlist []ast.Var) ast.Assignment {

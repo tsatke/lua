@@ -60,6 +60,8 @@ func (e *Engine) evaluateStatement(stmt ast.Statement) ([]value.Value, error) {
 		return e.evaluateFunctionCall(s)
 	case ast.Function:
 		return e.evaluateFunction(s)
+	case ast.LocalFunction:
+		return e.evaluateLocalFunction(s)
 	case ast.IfBlock:
 		return e.evaluateIfBlock(s)
 	case ast.DoBlock:
@@ -72,6 +74,19 @@ func (e *Engine) evaluateStatement(stmt ast.Statement) ([]value.Value, error) {
 		return e.evaluateWhileBlock(s)
 	}
 	return nil, fmt.Errorf("%T unsupported", stmt)
+}
+
+func (e *Engine) evaluateLocalFunction(fn ast.LocalFunction) ([]value.Value, error) {
+	fnName := fn.Name.Value()
+
+	luaFn, err := e.createCallable(fn.FuncBody.ParList, fn.FuncBody.Block)
+	if err != nil {
+		return nil, fmt.Errorf("create callable: %w", err)
+	}
+
+	functionValue := value.NewFunction(fnName, luaFn)
+	e.assign(e.currentScope(), fnName, functionValue)
+	return nil, nil
 }
 
 func (e *Engine) evaluateWhileBlock(block ast.WhileBlock) ([]value.Value, error) {
@@ -272,7 +287,7 @@ func (e *Engine) evaluateAssignment(assignment ast.Assignment) error {
 			return fmt.Errorf("explist: %w", err)
 		}
 
-		for i := 0; i < len(values); i++ {
+		for i := 0; i < len(values) && i < len(assignment.VarList); i++ {
 			if err := e.evaluateAssign(assignment.VarList[i], values[i]); err != nil {
 				return fmt.Errorf("assign: %w", err)
 			}
@@ -304,12 +319,15 @@ func (e *Engine) evaluateAssign(v ast.Var, val value.Value) error {
 	if len(v.Fragments) == 0 {
 		name := v.Name.Value()
 		scope := e._G
-		// if the variable is already declared in the current scope (either
-		// we are currently in the global scope, or the variable has been declared
-		// with 'local'), assign in the current scope
-		if _, ok := e.currentScope().Fields[value.NewString(name)]; ok {
-			scope = e.currentScope()
+
+		// find a scope where the variable might already exist
+		varName := value.NewString(name)
+		for i := 0; i < len(e.scopes); i++ {
+			if _, ok := e.scopes[i].Fields[varName]; ok {
+				scope = e.scopes[i]
+			}
 		}
+
 		e.assign(scope, name, val)
 		return nil
 	}

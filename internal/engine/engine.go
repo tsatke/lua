@@ -152,8 +152,9 @@ func (e *Engine) leaveScope() {
 // variable searches for a variable with the given Name, starting in the current
 // scope and always visiting the parent scope if there is no such variable.
 func (e *Engine) variable(name string) (value.Value, bool) {
+	varName := value.NewString(name)
 	for i := 0; i < len(e.scopes); i++ {
-		if val, ok := e.scopes[i].Fields[value.NewString(name)]; ok {
+		if val, ok := e.scopes[i].Fields[varName]; ok {
 			return val, true
 		}
 	}

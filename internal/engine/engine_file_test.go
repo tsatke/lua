@@ -8,6 +8,32 @@ import (
 	"github.com/tsatke/lua/internal/engine/value"
 )
 
+func (suite *EngineSuite) TestLocal() {
+	suite.runFileTests("local", []fileTest{
+		{
+			"local01.lua",
+			nil,
+			"",
+			"6\n",
+			"",
+		},
+		{
+			"local02.lua",
+			nil,
+			"",
+			"6\nnil\n",
+			"",
+		},
+		{
+			"local03.lua",
+			nil,
+			"",
+			"local foo()\nnil\n",
+			"",
+		},
+	})
+}
+
 func (suite *EngineSuite) TestWhile() {
 	suite.runFileTests("while", []fileTest{
 		{
@@ -141,6 +167,13 @@ func (suite *EngineSuite) TestAssign() {
 			nil,
 			"",
 			"b\ta\n",
+			"",
+		},
+		{
+			"assign02.lua",
+			nil,
+			"",
+			"1\n",
 			"",
 		},
 	})

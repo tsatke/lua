@@ -281,7 +281,7 @@ func (e *Engine) tostring(args ...Value) ([]Value, error) {
 	case TypeString:
 		return values(value), nil
 	case TypeFunction:
-		return values(NewString("function " + value.(Function).Name)), nil
+		return values(NewString("function " + value.(*Function).Name)), nil
 	case TypeNumber:
 		return values(NewString(strconv.FormatFloat(float64(value.(Number)), 'G', -1, 64))), nil
 	}
