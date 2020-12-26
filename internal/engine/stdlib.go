@@ -22,6 +22,7 @@ func (e *Engine) initStdlib() {
 	register(NewFunction("dofile", e.dofile))
 	register(NewFunction("error", e.error))
 	register(NewFunction("getmetatable", e.getmetatable))
+	register(NewFunction("ipairs", e.ipairs))
 	register(NewFunction("pcall", e.pcall))
 	register(NewFunction("print", e.print))
 	register(NewFunction("select", e.select_))
@@ -156,6 +157,42 @@ func (e *Engine) getmetatable(args ...Value) ([]Value, error) {
 		return values(metatable), nil
 	}
 	return nil, fmt.Errorf("no meta table for type %s", val.Type())
+}
+
+func (e *Engine) ipairs(args ...Value) ([]Value, error) {
+	/*
+		-- From the Lua spec.
+		function iter (a, i)
+		  i = i + 1
+		  local v = a[i]
+		  if v then
+			return i, v
+		  end
+		end
+	*/
+	iter := func(args ...Value) ([]Value, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("need two arguments to 'iter'")
+		}
+		if _, ok := args[0].(*Table); !ok {
+			return nil, fmt.Errorf("bad argument #1 to 'iter' (%s expected, got %s)", TypeTable, args[0].Type())
+		}
+		if _, ok := args[1].(Number); !ok {
+			return nil, fmt.Errorf("bad argument #2 to 'iter' (%s expected, got %s)", TypeNumber, args[0].Type())
+		}
+		var a *Table
+		var i Number
+		a = args[0].(*Table)
+		i = args[1].(Number)
+		i = NewNumber(i.Value() + 1)
+		v, ok := a.Get(i)
+		if ok {
+			return values(i, v), nil
+		}
+		return nil, nil
+	}
+	iterFn := NewFunction("iter", iter)
+	return values(iterFn, args[0], NewNumber(0)), nil
 }
 
 func (e *Engine) pcall(args ...Value) ([]Value, error) {

@@ -74,8 +74,56 @@ func (e *Engine) evaluateStatement(stmt ast.Statement) ([]value.Value, error) {
 		return e.evaluateWhileBlock(s)
 	case ast.ForBlock:
 		return e.evaluateForBlock(s)
+	case ast.ForInBlock:
+		return e.evaluateForInBlock(s)
 	}
 	return nil, fmt.Errorf("%T unsupported", stmt)
+}
+
+func (e *Engine) evaluateForInBlock(block ast.ForInBlock) ([]value.Value, error) {
+	exps, err := e.evaluateExpList(block.In)
+	if err != nil {
+		return nil, fmt.Errorf("explist: %w", err)
+	}
+
+	if len(exps) != 3 {
+		return nil, fmt.Errorf("explist didn't evaluate to 3 expressions, iter, state and initial, only got %d", len(exps))
+	}
+
+	iter := exps[0].(*value.Function)
+	state := exps[1]
+	init := exps[2]
+
+	e.enterNewScope()
+	defer e.leaveScope()
+
+	forScope := e.currentScope()
+
+	for {
+		vars, err := e.call(iter, state, init)
+		if err != nil {
+			return nil, fmt.Errorf("call iter: %w", err)
+		}
+		if len(vars) == 0 || vars[0] == nil || vars[0] == value.Nil {
+			break
+		}
+		init = vars[0]
+
+		for i, name := range block.NameList {
+			if len(vars) > i {
+				e.assign(forScope, name.Value(), vars[i])
+			} else {
+				e.assign(forScope, name.Value(), value.Nil)
+			}
+		}
+
+		_, err = e.evaluateBlock(block.Do)
+		if err != nil {
+			return nil, fmt.Errorf("block: %w", err)
+		}
+	}
+
+	return nil, nil
 }
 
 func (e *Engine) evaluateForBlock(block ast.ForBlock) ([]value.Value, error) {
@@ -93,7 +141,6 @@ func (e *Engine) evaluateForBlock(block ast.ForBlock) ([]value.Value, error) {
 	if err != nil {
 		return nil, fmt.Errorf("need a number as from-argument in for loop")
 	}
-
 	from = fromNums[0].(value.Number).Value()
 
 	results, err = e.evaluateExpression(block.To)
@@ -108,7 +155,6 @@ func (e *Engine) evaluateForBlock(block ast.ForBlock) ([]value.Value, error) {
 	if err != nil {
 		return nil, fmt.Errorf("need a number as to-argument in for loop")
 	}
-
 	to = toNums[0].(value.Number).Value()
 
 	if block.Step != nil {
@@ -124,7 +170,6 @@ func (e *Engine) evaluateForBlock(block ast.ForBlock) ([]value.Value, error) {
 		if err != nil {
 			return nil, fmt.Errorf("need a number as step-argument in for loop")
 		}
-
 		step = stepNums[0].(value.Number).Value()
 	} else {
 		step = 1 // default value for step

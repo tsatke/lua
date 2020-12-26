@@ -1,6 +1,9 @@
 package value
 
-import "strconv"
+import (
+	"math"
+	"strconv"
+)
 
 type Number float64
 
@@ -10,4 +13,9 @@ func (n Number) String() string { return strconv.FormatFloat(float64(n), 'G', -1
 
 func NewNumber(value float64) Number {
 	return Number(value)
+}
+
+func (n Number) Integral() (int64, bool) {
+	trunc := math.Trunc(float64(n))
+	return int64(trunc), trunc == float64(n)
 }

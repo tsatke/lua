@@ -245,7 +245,37 @@ func (p *parser) stmt() (stmt ast.Statement) {
 		}
 		return whileBlock
 	case tk.Is(token.For):
-		p.stash(tk)
+		l1, ok := p.next()
+		if !ok {
+			p.collectError(ErrUnexpectedEof("name"))
+			return nil
+		}
+		if !l1.Is(token.Name) {
+			p.collectError(ErrUnexpectedThing("name", l1))
+			return nil
+		}
+		l2, ok := p.next()
+		if !ok {
+			p.collectError(ErrUnexpectedEof("comma or '='"))
+			return nil
+		}
+		if !l2.Is(token.Comma) && !l2.Is(token.In) && !l2.Is(token.Assign) {
+			p.collectError(ErrUnexpectedThing("comma, 'in' or '='", l2))
+			return nil
+		}
+
+		forIn := l2.Is(token.Comma) || l2.Is(token.In)
+
+		p.stash(tk, l1, l2)
+		if forIn {
+			forInBlock, ok := p.forInBlock()
+			if !ok {
+				p.collectError(ErrExpectedSomething("for-in block"))
+				return nil
+			}
+			return forInBlock
+		}
+
 		forBlock, ok := p.forBlock()
 		if !ok {
 			p.collectError(ErrExpectedSomething("for block"))
@@ -255,6 +285,67 @@ func (p *parser) stmt() (stmt ast.Statement) {
 	}
 	p.stash(tk)
 	return nil
+}
+
+func (p *parser) forInBlock() (ast.ForInBlock, bool) {
+	if !p.requireToken(token.For) {
+		return ast.ForInBlock{}, false
+	}
+
+	var nameList []token.Token
+
+	for {
+		name, ok := p.next()
+		if !ok {
+			p.collectError(ErrUnexpectedEof("name"))
+			return ast.ForInBlock{}, false
+		}
+		if !name.Is(token.Name) {
+			p.collectError(ErrUnexpectedThing("name", name))
+			return ast.ForInBlock{}, false
+		}
+		nameList = append(nameList, name)
+
+		comma, ok := p.next()
+		if !ok {
+			p.collectError(ErrUnexpectedEof("comma or 'in'"))
+			return ast.ForInBlock{}, false
+		}
+		if !comma.Is(token.Comma) {
+			p.stash(comma)
+			break
+		}
+	}
+
+	if !p.requireToken(token.In) {
+		return ast.ForInBlock{}, false
+	}
+
+	explist := p.explist()
+	if explist == nil {
+		p.collectError(ErrExpectedSomething("explist"))
+		return ast.ForInBlock{}, false
+	}
+
+	if !p.requireToken(token.Do) {
+		return ast.ForInBlock{}, false
+	}
+
+	block := p.block()
+	if block == nil {
+		p.collectError(ErrExpectedSomething("block"))
+		return ast.ForInBlock{}, false
+	}
+
+	if !p.requireToken(token.End) {
+		return ast.ForInBlock{}, false
+	}
+
+	return ast.ForInBlock{
+		NameList: nameList,
+		In:       explist,
+		Do:       block,
+	}, true
 }
 
 func (p *parser) forBlock() (ast.ForBlock, bool) {
@@ -988,7 +1079,6 @@ func (p *parser) field() (ast.Field, bool) {
 	case next.Is(token.Name):
 		name = next
 	case next.Is(token.BracketLeft):
-
 		leftExp = p.exp()
 		if leftExp == nil {
 			p.collectError(ErrExpectedSomething("exp"))
@@ -998,6 +1088,8 @@ func (p *parser) field() (ast.Field, bool) {
 		if !p.requireToken(token.BracketRight) {
 			return ast.Field{}, false
 		}
+	default:
+		p.stash(next)
 	}
 
 	if name != nil || leftExp != nil {

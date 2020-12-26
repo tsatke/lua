@@ -15,7 +15,7 @@ func NewTable() *Table {
 func (Table) Type() Type { return TypeTable }
 
 func (t *Table) Set(key Value, value Value) {
-	if value == Nil {
+	if value == Nil || value == nil {
 		delete(t.Fields, key)
 	} else {
 		t.Fields[key] = value

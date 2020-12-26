@@ -8,6 +8,25 @@ import (
 	"github.com/tsatke/lua/internal/engine/value"
 )
 
+func (suite *EngineSuite) TestIpairs() {
+	suite.runFileTests("ipairs", []fileTest{
+		{
+			"ipairs01.lua",
+			nil,
+			"",
+			"1\ta\n2\tb\n3\tc\n",
+			"",
+		},
+		{
+			"ipairs02.lua",
+			nil,
+			"",
+			"1\n2\n3\n",
+			"",
+		},
+	})
+}
+
 func (suite *EngineSuite) TestFor() {
 	suite.runFileTests("for", []fileTest{
 		{
