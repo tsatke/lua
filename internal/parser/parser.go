@@ -915,7 +915,11 @@ func (p *parser) explist() []ast.Exp {
 	return list
 }
 
-func (p *parser) exp() (exp ast.Exp) {
+func (p *parser) exp() ast.Exp {
+	return p.expPrecedence(p.expAtomic(), precedence0)
+}
+
+func (p *parser) expAtomic() (exp ast.Exp) {
 	next, ok := p.next()
 	if !ok {
 		return nil
@@ -988,28 +992,54 @@ func (p *parser) exp() (exp ast.Exp) {
 		p.collectError(ErrUnexpectedThing("either 'nil', 'false', 'true', '...', a number, a string, a unary operator, a name, 'function', '(' or '{'", next))
 		return
 	}
+	return
+}
 
-	// check lookahead for binary operation expression
-
+func (p *parser) expPrecedence(lhs ast.Exp, minPrecedence precedence) ast.Exp {
 	lookahead, ok := p.next()
 	if !ok {
-		return
+		return lhs
 	}
-	if lookahead.Is(token.BinaryOperator) {
-		nextExp := p.exp()
-		if nextExp == nil {
-			p.collectError(ErrExpectedSomething("exp after binary operator"))
+	p.stash(lookahead)
+
+	for lookahead != nil && lookahead.Is(token.BinaryOperator) && precedenceOf(lookahead.Value()) >= minPrecedence {
+		op := lookahead
+
+		_, ok = p.next()
+		if !ok {
+			p.collectError(ErrUnexpectedEof("right hand side of expression"))
 			return nil
 		}
-		exp = ast.BinopExp{
-			Left:  exp,
-			Binop: lookahead,
-			Right: nextExp,
+
+		rhs := p.expAtomic()
+
+		lookahead, ok = p.next()
+		if !ok {
+			return ast.BinopExp{
+				Left:  lhs,
+				Binop: op,
+				Right: rhs,
+			}
 		}
-	} else {
 		p.stash(lookahead)
+
+		for lookahead.Is(token.BinaryOperator) && ((precedenceOf(lookahead.Value()) > precedenceOf(op.Value())) ||
+			(isRightAssociative(lookahead.Value()) && (precedenceOf(lookahead.Value()) == precedenceOf(op.Value())))) {
+			rhs = p.expPrecedence(rhs, precedenceOf(lookahead.Value()))
+			lookahead, ok = p.next()
+			if !ok {
+				break
+			}
+			p.stash(lookahead)
+		}
+		lhs = ast.BinopExp{
+			Left:  lhs,
+			Binop: op,
+			Right: rhs,
+		}
 	}
-	return
+
+	return lhs
 }
 
 func (p *parser) tableconstructor() (ast.TableConstructor, bool) {

@@ -5,6 +5,48 @@ import (
 	"github.com/tsatke/lua/internal/token"
 )
 
+func (suite *ParserSuite) TestOperator() {
+	suite.assertChunkString(`
+x = a + b < c - d
+`, ast.Chunk{
+		Name: "<unknown input>",
+		Block: ast.Block{
+			ast.Assignment{
+				VarList: []ast.Var{
+					{
+						PrefixExp: ast.PrefixExp{
+							Name: token.New("x", token.Position{2, 1, 1}, token.Name),
+						},
+					},
+				},
+				ExpList: []ast.Exp{
+					ast.BinopExp{
+						Left: ast.BinopExp{
+							Left: ast.PrefixExp{
+								Name: token.New("a", token.Position{2, 5, 5}, token.Name),
+							},
+							Binop: token.New("+", token.Position{2, 7, 7}, token.BinaryOperator),
+							Right: ast.PrefixExp{
+								Name: token.New("b", token.Position{2, 9, 9}, token.Name),
+							},
+						},
+						Binop: token.New("<", token.Position{2, 11, 11}, token.BinaryOperator),
+						Right: ast.BinopExp{
+							Left: ast.PrefixExp{
+								Name: token.New("c", token.Position{2, 13, 13}, token.Name),
+							},
+							Binop: token.New("-", token.Position{2, 15, 15}, token.UnaryOperator, token.BinaryOperator),
+							Right: ast.PrefixExp{
+								Name: token.New("d", token.Position{2, 17, 17}, token.Name),
+							},
+						},
+					},
+				},
+			},
+		},
+	})
+}
+
 func (suite *ParserSuite) TestParse() {
 	suite.assertChunkString(`
 print("Hello, World!")
