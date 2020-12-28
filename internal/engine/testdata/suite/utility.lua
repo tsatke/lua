@@ -4,7 +4,7 @@
 --- will error.
 function assertEqual(left, right)
     if left ~= right then
-        error("not equal: want " .. left .. " but got " .. right, 2)
+        error("not equal: want " .. tostring(left) .. " but got " .. tostring(right), 2)
     end
 end
 
@@ -40,8 +40,13 @@ if pcall(assertFalse, true) then
     error("assertFalse seems broken")
 end
 
+function runFile(file)
+    print("=== runFile [ " .. file .. " ]")
+    dofile(file)
+end
+
 function runTest(name, testFn)
-    print("runTest [" .. name .. "]")
+    print("--- runTest [ " .. name .. " ]")
     ok, msg = pcall(testFn)
     if not ok then
         print("❌ FAIL (message: " .. msg .. ")")

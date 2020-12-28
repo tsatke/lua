@@ -25,6 +25,7 @@ func (e *Engine) initStdlib() {
 	register(NewFunction("ipairs", e.ipairs))
 	register(NewFunction("pcall", e.pcall))
 	register(NewFunction("print", e.print))
+	register(NewFunction("rawget", e.rawget))
 	register(NewFunction("select", e.select_))
 	register(NewFunction("setmetatable", e.setmetatable))
 	register(NewFunction("tostring", e.tostring))
@@ -35,7 +36,7 @@ func (e *Engine) assert(args ...Value) ([]Value, error) {
 	if len(args) == 0 {
 		return nil, fmt.Errorf("need at least one argument to 'assert'")
 	}
-	if args[0] == nil || args[0] == Nil || args[0] == False {
+	if e.isNil(args[0]) || args[0] == False {
 		if len(args) > 1 {
 			return e.error(args[1])
 		}
@@ -65,7 +66,7 @@ func (e *Engine) collectgarbage(args ...Value) ([]Value, error) {
 	case "count":
 		var m runtime.MemStats
 		runtime.ReadMemStats(&m)
-		return values(NewString(fmt.Sprintf("%d", m.HeapAlloc))), nil // TODO this has to be a number
+		return values(NewNumber(float64(m.HeapAlloc))), nil
 	case "step":
 		runtime.GC()
 		return values(True), nil
@@ -115,7 +116,7 @@ func (e *Engine) dofile(args ...Value) ([]Value, error) {
 	results, err := e.Eval(file)
 	if err != nil {
 		if luaErr, ok := err.(Error); ok {
-			panic(luaErr) // if the chunk in the file errored, the error has to be propagated
+			return nil, luaErr
 		}
 		return nil, fmt.Errorf("eval: %w", err)
 	}
@@ -148,7 +149,7 @@ func (e *Engine) getmetatable(args ...Value) ([]Value, error) {
 
 	val := args[0]
 	if val.Type() == TypeTable {
-		if metatable := val.(Table).Metatable; metatable != nil {
+		if metatable := val.(*Table).Metatable; metatable != nil {
 			return values(metatable), nil
 		}
 		return values(Nil), nil
@@ -242,6 +243,27 @@ func (e *Engine) print(args ...Value) ([]Value, error) {
 	return nil, nil
 }
 
+func (e *Engine) rawget(args ...Value) ([]Value, error) {
+	if len(args) != 2 {
+		return nil, fmt.Errorf("need exactly two arguments to 'rawget'")
+	}
+
+	var table *Table
+	index := args[1]
+
+	if tbl, ok := args[0].(*Table); ok {
+		table = tbl
+	} else {
+		return nil, fmt.Errorf("bad argument #1 to 'rawget' (%s expected, got %s)", TypeTable, args[0].Type())
+	}
+
+	val, ok := table.Get(index)
+	if !ok {
+		return values(Nil), nil
+	}
+	return values(val), nil
+}
+
 func (e *Engine) select_(args ...Value) ([]Value, error) {
 	if len(args) == 0 {
 		return nil, fmt.Errorf("need at least one argument to 'select'")
@@ -289,9 +311,9 @@ func (e *Engine) setmetatable(args ...Value) ([]Value, error) {
 		}
 	}
 	if args[1] == Nil {
-		metatable = nil
+		args[0].(*Table).Metatable = nil
 	} else {
-		metatable = args[1].(*Table)
+		args[0].(*Table).Metatable = args[1].(*Table)
 	}
 
 	return values(args[0]), nil

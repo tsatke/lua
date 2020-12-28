@@ -158,7 +158,7 @@ func (e *Engine) variable(name string) (value.Value, bool) {
 			return val, true
 		}
 	}
-	return nil, false
+	return value.Nil, false
 }
 
 func (e *Engine) call(fn *value.Function, args ...value.Value) (vs []value.Value, err error) {
@@ -202,6 +202,9 @@ func (e *Engine) createCallable(parameters ast.ParList, block ast.Block) (value.
 
 		// assign all arguments to the parameters in the current scope
 		for i, arg := range args {
+			if i >= len(parameters.NameList) {
+				break
+			}
 			e.assign(e.currentScope(), parameters.NameList[i].Value(), arg)
 		}
 
@@ -211,4 +214,93 @@ func (e *Engine) createCallable(parameters ast.ParList, block ast.Block) (value.
 		}
 		return results, nil
 	}, nil
+}
+
+func (e *Engine) isNil(val value.Value) bool {
+	return val == nil || val == value.Nil
+}
+
+func (e *Engine) performIndexOperation(obj, key value.Value) ([]value.Value, error) {
+	event := "__index"
+	indexMetaMethod, err := e.metaMethod(obj, event)
+	if err != nil {
+		return nil, fmt.Errorf("unable to obtain %s: %w", event, err)
+	}
+
+	if e.isNil(indexMetaMethod) {
+		result, _ := obj.(*value.Table).Get(key)
+		if result == nil {
+			result = value.Nil
+		}
+		return values(result), nil
+	} else {
+		switch metaMethod := indexMetaMethod.(type) {
+		case *value.Function:
+			metaMethodResults, err := e.call(metaMethod, obj, key)
+			if err != nil {
+				return nil, fmt.Errorf("call %s: %w", event, err)
+			}
+			if len(metaMethodResults) == 0 {
+				return nil, fmt.Errorf("%s did not return any value", event)
+			}
+			return metaMethodResults, nil
+		case *value.Table:
+			return e.performIndexOperation(metaMethod, key)
+		default:
+			return nil, fmt.Errorf("unsupported meta method type: %T", metaMethod)
+		}
+	}
+}
+
+func (e *Engine) performCreateIndex(tbl, key, val value.Value) error {
+	event := "__newindex"
+
+	table := tbl.(*value.Table)
+
+	indexMetaMethod, err := e.metaMethod(table, event)
+	if err != nil {
+		return fmt.Errorf("meta method: %w", err)
+	}
+
+	if e.isNil(indexMetaMethod) {
+		table.Set(key, val)
+		return nil
+	}
+	switch metaMethod := indexMetaMethod.(type) {
+	case *value.Function:
+		_, err := e.call(metaMethod, table, key, val)
+		if err != nil {
+			return fmt.Errorf("call %s: %w", event, err)
+		}
+		return nil
+	case *value.Table:
+		if err := e.performCreateIndex(metaMethod, key, val); err != nil {
+			return fmt.Errorf("create index: %w", err)
+		}
+		return nil
+	default:
+		return fmt.Errorf("unsupported meta method type: %T", metaMethod)
+	}
+}
+
+func (e *Engine) attemptCall(obj value.Value, args ...value.Value) ([]value.Value, error) {
+	if fn, ok := obj.(*value.Function); ok {
+		return e.call(fn, args...)
+	}
+
+	metaMethod, err := e.metaMethodFunction(obj, "__call")
+	if err != nil {
+		return nil, fmt.Errorf("meta method __call: %w", err)
+	}
+
+	arguments := make([]value.Value, len(args)+1)
+	arguments[0] = obj
+	copy(arguments[1:], args)
+
+	results, err := e.call(metaMethod, arguments...)
+	if err != nil {
+		return nil, fmt.Errorf("call __call: %w", err)
+	}
+
+	return results, nil
 }

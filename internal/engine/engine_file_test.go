@@ -8,6 +8,18 @@ import (
 	"github.com/tsatke/lua/internal/engine/value"
 )
 
+func (suite *EngineSuite) TestRawget() {
+	suite.runFileTests("rawget", []fileTest{
+		{
+			"rawget01.lua",
+			nil,
+			"",
+			"a\nb\nc\nnil\nnil\n",
+			"",
+		},
+	})
+}
+
 func (suite *EngineSuite) TestIpairs() {
 	suite.runFileTests("ipairs", []fileTest{
 		{

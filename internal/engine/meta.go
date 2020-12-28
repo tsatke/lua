@@ -1,6 +1,9 @@
 package engine
 
-import "github.com/tsatke/lua/internal/engine/value"
+import (
+	"fmt"
+	"github.com/tsatke/lua/internal/engine/value"
+)
 
 type metaTables struct {
 	NilMetaTable      *value.Table
@@ -34,4 +37,56 @@ func (t metaTables) Table(typ value.Type) *value.Table {
 		return t.ThreadMetaTable
 	}
 	return nil
+}
+
+func (e *Engine) metaMethodFunction(object value.Value, event string) (*value.Function, error) {
+	val, err := e.metaMethod(object, event)
+	if err != nil {
+		return nil, err
+	}
+	if e.isNil(val) {
+		return nil, nil
+	}
+	return val.(*value.Function), nil
+}
+
+func (e *Engine) metaMethodTable(object value.Value, event string) (*value.Table, error) {
+	val, err := e.metaMethod(object, event)
+	if err != nil {
+		return nil, err
+	}
+	if e.isNil(val) {
+		return nil, nil
+	}
+	return val.(*value.Table), nil
+}
+
+func (e *Engine) metaMethod(object value.Value, event string) (value.Value, error) {
+	var metaTable *value.Table
+
+	switch object.Type() {
+	case value.TypeTable:
+		results, err := e.getmetatable(object)
+		if err != nil {
+			return nil, fmt.Errorf("getmetatable: %w", err)
+		}
+		if results[0] == nil || results[0] == value.Nil {
+			return nil, nil
+		}
+		metaTable = results[0].(*value.Table)
+	default:
+		metaTable = e.metaTables.Table(object.Type())
+	}
+
+	if metaTable == nil {
+		return nil, nil
+	}
+
+	eventString := value.NewString(event)
+	metaMethods, err := e.rawget(metaTable, eventString)
+	if err != nil {
+		return nil, fmt.Errorf("rawget: %w", err)
+	}
+
+	return metaMethods[0], nil
 }

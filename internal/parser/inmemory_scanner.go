@@ -426,7 +426,7 @@ start:
 		if s.check("~=") {
 			return s.token(token.BinaryOperator), true
 		} else if s.check("~") {
-			return s.token(token.UnaryOperator), true
+			return s.token(token.UnaryOperator, token.BinaryOperator), true
 		}
 	case '#':
 		if s.check("#") {

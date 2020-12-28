@@ -109,7 +109,9 @@ func (suite *EngineSuite) TestLuaSuite() {
 	suite.T().Logf("stdout (%d bytes):\n%s", len(stdout.Bytes()), stdout.String())
 	suite.T().Logf("stderr (%d bytes):\n%s", len(stderr.Bytes()), stderr.String())
 
-	suite.Require().Len(results, 1)
-	rc := results[0]
-	suite.EqualValues(rc.(value.Number).Value(), 0, "RC != 0")
+	if !suite.T().Failed() {
+		suite.Require().Len(results, 1)
+		rc := results[0]
+		suite.EqualValues(rc.(value.Number).Value(), 0, "RC != 0")
+	}
 }

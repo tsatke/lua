@@ -491,8 +491,7 @@ func (e *Engine) evaluateAssign(v ast.Var, val value.Value) error {
 		if len(results) == 0 {
 			return fmt.Errorf("index exp didn't evaluate to any value")
 		}
-		key := results[0]
-		table.Set(key, val)
+		return e.performCreateIndex(table, results[0], val)
 	}
 	return nil
 }
@@ -587,6 +586,9 @@ func (e *Engine) evaluateUnopExpression(exp ast.UnopExp) ([]value.Value, error) 
 	}
 	operand := operands[0]
 
+	var event string
+	var metaMethod *value.Function
+
 	switch exp.Unop.Value() {
 	case "-":
 		if num, ok := operand.(value.Number); ok {
@@ -596,6 +598,7 @@ func (e *Engine) evaluateUnopExpression(exp ast.UnopExp) ([]value.Value, error) 
 			}
 			return results, nil
 		}
+		event = "__unm"
 	case "not":
 		if boolVal, ok := operand.(value.Boolean); ok {
 			if boolVal {
@@ -603,10 +606,46 @@ func (e *Engine) evaluateUnopExpression(exp ast.UnopExp) ([]value.Value, error) 
 			}
 			return values(value.True), nil
 		}
+		if e.valueIsLogicallyTrue(operand) {
+			return values(value.False), nil
+		}
+		return values(value.True), nil
 	case "~":
-		return e.evaluateBitwiseNot(operand)
+		if num, ok := operand.(value.Number); ok {
+			results, err := e.evaluateBitwiseNot(num)
+			if err != nil {
+				return nil, err
+			}
+			return results, nil
+		}
+		event = "__bnot"
+	case "#":
+		if operand.Type() == value.TypeString || operand.Type() == value.TypeTable {
+			results, err := e.evaluateLen(operand)
+			if err != nil {
+				return nil, err
+			}
+			return results, nil
+		}
+		// metamethod needs to be called inside evaluateLen
 	}
-	return nil, fmt.Errorf("unsupported unary operator '%s' on %s", exp.Unop.Value(), operand.Type())
+
+	if event != "" {
+		metaMethod, err = e.metaMethodFunction(operand, event)
+		if err != nil {
+			return nil, fmt.Errorf("metaMethodFunction: %w", err)
+		}
+	}
+
+	if metaMethod == nil {
+		return nil, fmt.Errorf("unsupported unary operator '%s' on %s", exp.Unop.Value(), operand.Type())
+	}
+
+	results, err := e.call(metaMethod, operand)
+	if err != nil {
+		return nil, err
+	}
+	return results, nil
 }
 
 func (e *Engine) evaluateBinopExpression(exp ast.BinopExp) ([]value.Value, error) {
@@ -661,10 +700,14 @@ func (e *Engine) evaluateBinopEager(exp ast.BinopExp) ([]value.Value, error) {
 		operator = e.evaluateDivision
 	case "//":
 		operator = e.evaluateFloorDivision
+	case "^":
+		operator = e.evaluatePower
 	case "==":
 		operator = e.evaluateEqual
 	case "~=":
 		operator = e.evaluateUnequal
+	case "~":
+		operator = e.evaluateBitwiseXor
 	case "<":
 		operator = e.evaluateLess
 	case "<=":
@@ -692,6 +735,14 @@ func (e *Engine) evaluateBinopEager(exp ast.BinopExp) ([]value.Value, error) {
 		return nil, fmt.Errorf("unsupported binary operator %s", exp.Binop.Value())
 	}
 	return operator(left, right)
+}
+
+func (e *Engine) evaluateLen(val value.Value) ([]value.Value, error) {
+	results, err := e.length(val)
+	if err != nil {
+		return nil, fmt.Errorf("len: %w", err)
+	}
+	return results, nil
 }
 
 func (e *Engine) evaluateBitwiseNot(val value.Value) ([]value.Value, error) {
@@ -722,6 +773,14 @@ func (e *Engine) evaluateBitwiseOr(left, right value.Value) ([]value.Value, erro
 	results, err := e.bitwiseOr(left, right)
 	if err != nil {
 		return nil, fmt.Errorf("bitwise or: %w", err)
+	}
+	return results, nil
+}
+
+func (e *Engine) evaluateBitwiseXor(left, right value.Value) ([]value.Value, error) {
+	results, err := e.bitwiseXor(left, right)
+	if err != nil {
+		return nil, fmt.Errorf("bitwise xor: %w", err)
 	}
 	return results, nil
 }
@@ -798,29 +857,54 @@ func (e *Engine) evaluateFloorDivision(left, right value.Value) ([]value.Value, 
 	return results, nil
 }
 
+func (e *Engine) evaluatePower(left, right value.Value) ([]value.Value, error) {
+	results, err := e.power(left, right)
+	if err != nil {
+		return nil, fmt.Errorf("power: %w", err)
+	}
+	return results, nil
+}
+
 func (e *Engine) evaluateEqual(left, right value.Value) ([]value.Value, error) {
-	eq, err := e.equal(left, right)
+	results, err := e.cmpEqual(left, right)
 	if err != nil {
 		return nil, fmt.Errorf("compare: %w", err)
 	}
-	if eq {
-		return values(value.True), nil
-	}
-	return values(value.False), nil
+	return results, nil
 }
 
 func (e *Engine) evaluateUnequal(left, right value.Value) ([]value.Value, error) {
-	eq, err := e.equal(left, right)
+	results, err := e.evaluateEqual(left, right)
 	if err != nil {
-		return nil, fmt.Errorf("compare: %w", err)
+		return nil, err
 	}
-	if !eq {
-		return values(value.True), nil
+
+	result := results[0]
+	if e.valueIsLogicallyTrue(result) {
+		return values(value.False), nil
 	}
-	return values(value.False), nil
+	return values(value.True), nil
 }
 
 func (e *Engine) evaluateLess(left, right value.Value) ([]value.Value, error) {
+	if !(left.Type() == value.TypeNumber && right.Type() == value.TypeNumber) &&
+		!(left.Type() == value.TypeString && right.Type() == value.TypeString) {
+		results, ok, err := e.binaryMetaMethodOperation("__lt", left, right)
+		if !ok {
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			if len(results) < 1 {
+				return nil, fmt.Errorf("__lt did not evaluate to any value")
+			}
+			if e.valueIsLogicallyTrue(results[0]) {
+				return values(value.True), nil
+			}
+			return values(value.False), nil
+		}
+	}
+
 	less, err := e.less(left, right)
 	if err != nil {
 		return nil, fmt.Errorf("compare: %w", err)
@@ -832,6 +916,40 @@ func (e *Engine) evaluateLess(left, right value.Value) ([]value.Value, error) {
 }
 
 func (e *Engine) evaluateLessOrEqual(left, right value.Value) ([]value.Value, error) {
+	if !(left.Type() == value.TypeNumber && right.Type() == value.TypeNumber) &&
+		!(left.Type() == value.TypeString && right.Type() == value.TypeString) {
+		// use two events, first __le, then __lt
+		results, ok, err := e.binaryMetaMethodOperation("__le", left, right)
+		if !ok {
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			if len(results) < 1 {
+				return nil, fmt.Errorf("%s did not evaluate to any value", "__le")
+			}
+			if e.valueIsLogicallyTrue(results[0]) {
+				return values(value.True), nil
+			}
+			return values(value.False), nil
+		}
+
+		results, ok, err = e.binaryMetaMethodOperation("__lt", right, left)
+		if !ok {
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			if len(results) < 1 {
+				return nil, fmt.Errorf("%s did not evaluate to any value", "__lt")
+			}
+			if !e.valueIsLogicallyTrue(results[0]) {
+				return values(value.True), nil
+			}
+			return values(value.False), nil
+		}
+	}
+
 	lessEq, err := e.lessEqual(left, right)
 	if err != nil {
 		return nil, fmt.Errorf("compare: %w", err)
@@ -896,6 +1014,8 @@ func (e *Engine) evaluatePrefixExpression(exp ast.PrefixExp) ([]value.Value, err
 	var results []value.Value
 
 	for i, fragment := range exp.Fragments {
+		isLast := i < len(exp.Fragments)-1
+
 		if current == nil {
 			if fragment.Args != nil {
 				return nil, fmt.Errorf("cannot call nil value of variable '%s'", currentName)
@@ -917,11 +1037,14 @@ func (e *Engine) evaluatePrefixExpression(exp ast.PrefixExp) ([]value.Value, err
 			if len(vals) == 0 {
 				return nil, fmt.Errorf("index exp didn't evaluate to any value")
 			}
-			current, _ = table.Get(vals[0])
-			if current == nil {
-				current = value.Nil
+			indexKey := vals[0]
+
+			indexResults, err := e.performIndexOperation(table, indexKey)
+			if err != nil {
+				return nil, fmt.Errorf("index: %w", err)
 			}
-			results = values(current)
+			results = indexResults
+			current = indexResults[0]
 			currentName = currentName + "[<index>]"
 		} else {
 			if fragment.Name != nil {
@@ -940,22 +1063,17 @@ func (e *Engine) evaluatePrefixExpression(exp ast.PrefixExp) ([]value.Value, err
 			if fragment.Args != nil {
 				// this fragment is a function call
 
-				fn, ok := current.(*value.Function)
-				if !ok {
-					return nil, fmt.Errorf("cannot call non-function variable '%s'", currentName)
-				}
-
 				args, err := e.evaluateArgs(*fragment.Args)
 				if err != nil {
 					return nil, fmt.Errorf("args: %w", err)
 				}
 
-				res, err := e.call(fn, args...)
+				res, err := e.attemptCall(current, args...)
 				if err != nil {
 					return nil, fmt.Errorf("call '%s': %w", currentName, err)
 				}
 				results = res
-				if len(res) == 0 && i < len(exp.Fragments)-1 {
+				if len(res) == 0 && isLast {
 					// One fragment function call can only return nil, if it's the last fragment. Otherwise,
 					// subsequent calls would attempt to call something on nil.
 					return nil, fmt.Errorf("calling '%s' returned nil, but it is not the last call in the chain", currentName)

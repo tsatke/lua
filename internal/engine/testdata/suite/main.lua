@@ -47,6 +47,8 @@ dofile("utility.lua")
 
 print("starting suite")
 
-dofile("operators.lua")
+runFile("operators.lua")
+runFile("strings.lua")
+runFile("metamethods.lua")
 
 return _RC

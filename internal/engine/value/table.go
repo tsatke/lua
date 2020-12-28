@@ -26,3 +26,7 @@ func (t *Table) Get(key Value) (Value, bool) {
 	val, ok := t.Fields[key]
 	return val, ok
 }
+
+func (t *Table) Length() Value {
+	return NewNumber(float64(len(t.Fields)))
+}
