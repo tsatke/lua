@@ -96,6 +96,7 @@ func (e *Engine) evaluateForInBlock(block ast.ForInBlock) ([]value.Value, error)
 
 	e.enterNewScope()
 	defer e.leaveScope()
+	defer recoverBreak()
 
 	forScope := e.currentScope()
 
@@ -177,6 +178,7 @@ func (e *Engine) evaluateForBlock(block ast.ForBlock) ([]value.Value, error) {
 
 	e.enterNewScope()
 	defer e.leaveScope()
+	defer recoverBreak()
 
 	forScope := e.currentScope()
 
@@ -212,6 +214,8 @@ func (e *Engine) evaluateLocalFunction(fn ast.LocalFunction) ([]value.Value, err
 }
 
 func (e *Engine) evaluateWhileBlock(block ast.WhileBlock) ([]value.Value, error) {
+	defer recoverBreak()
+
 	for {
 		results, err := e.evaluateExpression(block.While)
 		if err != nil {
@@ -234,6 +238,8 @@ func (e *Engine) evaluateWhileBlock(block ast.WhileBlock) ([]value.Value, error)
 }
 
 func (e *Engine) evaluateRepeatBlock(block ast.RepeatBlock) ([]value.Value, error) {
+	defer recoverBreak()
+
 	for {
 		_, err := e.evaluateBlock(block.Repeat)
 		if err != nil {
@@ -257,7 +263,7 @@ func (e *Engine) evaluateRepeatBlock(block ast.RepeatBlock) ([]value.Value, erro
 
 func (e *Engine) evaluateLastStatement(stmt ast.LastStatement) ([]value.Value, error) {
 	if stmt.Break {
-		return nil, fmt.Errorf("break not supported yet")
+		panic(Break{})
 	}
 
 	results, err := e.evaluateExpList(stmt.ExpList)

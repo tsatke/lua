@@ -20,6 +20,39 @@ func (suite *EngineSuite) TestRawget() {
 	})
 }
 
+func (suite *EngineSuite) TestBreak() {
+	suite.runFileTests("break", []fileTest{
+		{
+			"break01.lua",
+			nil,
+			"",
+			"1\n2\n3\nend\n",
+			"",
+		},
+		{
+			"break02.lua",
+			nil,
+			"",
+			"1\t1\n2\t2\n3\t3\nend\n",
+			"",
+		},
+		{
+			"break03.lua",
+			nil,
+			"",
+			"1\n2\n3\n4\nend\n",
+			"",
+		},
+		{
+			"break04.lua",
+			nil,
+			"",
+			"1\n2\n3\n4\nend\n",
+			"",
+		},
+	})
+}
+
 func (suite *EngineSuite) TestIpairs() {
 	suite.runFileTests("ipairs", []fileTest{
 		{

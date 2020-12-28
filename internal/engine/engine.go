@@ -304,3 +304,12 @@ func (e *Engine) attemptCall(obj value.Value, args ...value.Value) ([]value.Valu
 
 	return results, nil
 }
+
+func recoverBreak() {
+	if r := recover(); r != nil {
+		if _, ok := r.(Break); ok {
+			return
+		}
+		panic(r)
+	}
+}
