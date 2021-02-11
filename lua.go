@@ -20,6 +20,11 @@ type Engine struct {
 	scannerType ScannerType
 }
 
+func EvalString(in string) error {
+	_, err := NewEngine().EvalString(in)
+	return err
+}
+
 func NewEngine(opts ...Option) Engine {
 	e := Engine{
 		stdin:  os.Stdin,
